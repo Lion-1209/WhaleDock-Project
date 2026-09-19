@@ -12,7 +12,7 @@
 |---|---|
 | `firmware/` | ESP32-S3 固件（PlatformIO / Arduino-ESP32 3.x） |
 | `docs/` | 环境搭建、协议、开发文档 |
-| `console/` | Web 上位机（规划中，W2 起步：GitHub Pages 静态站） |
+| `console/` | Web 上位机（起步：Web Serial 配网调机台，纯静态零后端） |
 | `hardware/` | 结构 STEP 图纸（规划中） |
 
 ## 快速开始
@@ -29,6 +29,8 @@ pio run -t upload  # 烧录（USB-C 接 DevKitC-1 的 "USB" 口）
 
 - [x] M1 自检程序：Flash/PSRAM 自检 + 双色测试图点屏（棋盘格验证黑白平面、红角标验证红平面）
 - [ ] M2 数据闭环：Wi-Fi 事件状态机 + 配网 + NTP + GitHub REST + 整点刷新 + 串口 CLI
+  - 已完成：Wi-Fi 状态机（断开自愈）、串口 CLI（含中文 SSID）、console/ Web 配网调机台
+  - 待做：NTP 对时与整点调度、GitHub REST 拉取、LittleFS 缓存
 - [ ] Widget 引擎 / 布局 JSON 协议 v1 / 上位机 / OTA（里程碑见设计文档）
 
 ## 许可

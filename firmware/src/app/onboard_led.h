@@ -13,9 +13,12 @@
 class OnboardLed {
  public:
   void begin();   // 点微光 + 串口打印链路信息
-  void update();  // 每个 loop 调用：蓝色呼吸（周期/亮度见 config.h）
+  void update();  // 每个 loop 调用：呼吸（周期/亮度见 config.h）
+  void setBreathColor(uint8_t r, uint8_t g, uint8_t b);  // 默认蓝色
   void write(uint8_t r, uint8_t g, uint8_t b);
 
  private:
-  Ws2812 led_{38};  // 本机批次实测 GPIO38；部分批次为 GPIO48
+  // 本机批次实测 GPIO38、RGB 通道序（发绿显红暴露的问题）；部分批次为 GPIO48
+  Ws2812 led_{38, LED_COLOR_ORDER_RGB};
+  uint8_t cr_ = 0, cg_ = 0, cb_ = 255;  // 呼吸颜色，按 BREATH_MAX 归一化调制
 };

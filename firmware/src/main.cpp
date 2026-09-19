@@ -13,6 +13,8 @@
 #include "app/epaper_selftest.h"
 #include "app/onboard_led.h"
 #include "app/selfcheck.h"
+#include "services/cli.h"
+#include "services/wifi.h"
 
 static OnboardLed onboardLed;
 
@@ -23,6 +25,8 @@ void setup() {
 
   selfcheck::print();
   onboardLed.begin();
+  wifi::begin();
+  cli::begin();
 
   if (!SCREEN_ATTACHED) {
     Serial.println("[屏] 未接屏（SCREEN_ATTACHED=false），跳过点屏，进入呼吸心跳");
@@ -32,7 +36,14 @@ void setup() {
 }
 
 void loop() {
-  onboardLed.update();     // 蓝色呼吸
+  cli::poll();
+  wifi::poll();
+
+  // 呼吸灯兼任联网状态指示：绿 = 已连接，蓝 = 未连接/重连中
+  const bool online = wifi::state() == wifi::State::Connected;
+  onboardLed.setBreathColor(online ? 0 : 0, online ? 255 : 0, online ? 0 : 255);
+  onboardLed.update();
+
   selfcheck::heartbeat();  // 串口心跳（内部自行节流）
   delay(20);               // 呼吸周期下 20ms 步进已足够平滑
 }

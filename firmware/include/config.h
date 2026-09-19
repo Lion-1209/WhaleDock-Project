@@ -12,5 +12,9 @@ constexpr bool SCREEN_ATTACHED = false;
 constexpr uint32_t SERIAL_BAUD = 115200;         // 原生 USB CDC
 constexpr uint32_t HEARTBEAT_PERIOD_MS = 10000;  // 串口心跳周期
 constexpr uint32_t BREATH_PERIOD_MS = 3000;      // 呼吸灯周期
-constexpr uint8_t BREATH_MAX = 32;               // 呼吸峰值亮度（WS2812 满亮刺眼）
-constexpr uint8_t BREATH_MIN = 6;                // 呼吸谷值亮度（保持可见微光）
+constexpr uint8_t BREATH_MAX = 10;               // 呼吸峰值亮度（实测 32 晃眼，桌面级微光）
+constexpr uint8_t BREATH_MIN = 2;                // 呼吸谷值亮度（隐约可见）
+
+// Wi-Fi（services/wifi）：断开退避重连间隔、单次连接超时
+constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 15000;
+constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
