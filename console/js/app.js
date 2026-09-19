@@ -83,10 +83,11 @@ const fstate = {
 
 function parseCfg(line) {
   let m;
-  if ((m = line.match(/^\[配置\] githubUser=(.*) · githubRepo=(.*)$/))) {
-    const u = m[1], r = m[2];
+  if ((m = line.match(/^\[配置\] githubUser=(.*) · githubRepo=(.*) · token=(.*)$/))) {
+    const u = m[1], r = m[2], t = m[3];
     const unset = (s) => s.includes('未配置');
-    $('cfg-state').textContent = `当前：用户 ${u} · 仓库 ${r}`;
+    $('cfg-state').textContent =
+      `当前：用户 ${u} · 仓库 ${r} · Token ${t}`;
     $('cfg-state').className = 'wifi-state' + (!unset(u) ? ' ok' : '');
     if (!unset(u) && !$('cfg-user').value) $('cfg-user').value = u;
     if (!unset(r) && !$('cfg-repo').value) $('cfg-repo').value = r;
@@ -490,6 +491,7 @@ $('cfg-form').addEventListener('submit', (e) => {
   e.preventDefault();
   const u = $('cfg-user').value.trim();
   const r = $('cfg-repo').value.trim();
+  const t = $('cfg-token').value.trim();
   let sent = false;
   if (u) { cmd(`config user ${u}`)(); sent = true; }
   if (r) {
@@ -503,14 +505,27 @@ $('cfg-form').addEventListener('submit', (e) => {
     cmd(`config repo ${norm}`)();
     sent = true;
   }
+  if (t) { cmd(`config token ${t}`)(); $('cfg-token').value = ''; sent = true; }
   if (!sent) {
     $('cfg-state').textContent = '请至少填写一项（留空 = 不修改）';
     $('cfg-state').className = 'wifi-state warn';
   }
 });
+$('btn-cfg-clear-token').addEventListener('click', () => {
+  $('cfg-token').value = '';
+  cmd('config token -')();
+});
+$('show-token').addEventListener('change', (e) => {
+  $('cfg-token').type = e.target.checked ? 'text' : 'password';
+});
 $('btn-cfg-clear-repo').addEventListener('click', () => {
   $('cfg-repo').value = '';
   cmd('config repo -')();
+});
+$('btn-pipe').addEventListener('click', () => {
+  $('cfg-state').textContent = '拉取中（约 3-8s，看日志区滚动）…';
+  $('cfg-state').className = 'wifi-state';
+  cmd('pipe')();
 });
 $('btn-fs-refresh').addEventListener('click', () => {
   fstate.files.clear();

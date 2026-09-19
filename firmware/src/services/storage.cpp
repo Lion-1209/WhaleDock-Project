@@ -80,12 +80,14 @@ bool loadConfig(Config& out) {
   // 无配置文件（出厂态）时给默认值：Datawhale 组织（datawhalechina）
   out.githubUser = GITHUB_DEFAULT_USER;
   out.githubRepo = "";
+  out.githubToken = "";
   const String s = readFile(kCfgPath);
   if (!s.length()) return false;  // 出厂态（默认值已填，文件尚不存在）
   JsonDocument doc;
   if (deserializeJson(doc, s)) return false;
   out.githubUser = doc["githubUser"] | GITHUB_DEFAULT_USER;
   out.githubRepo = doc["githubRepo"] | "";
+  out.githubToken = doc["githubToken"] | "";
   return true;
 }
 
@@ -93,6 +95,7 @@ bool saveConfig(const Config& c) {
   JsonDocument doc;
   doc["githubUser"] = c.githubUser;
   doc["githubRepo"] = c.githubRepo;
+  doc["githubToken"] = c.githubToken;
   String out;
   serializeJson(doc, out);
   return writeFile(kCfgPath, out);

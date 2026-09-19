@@ -14,6 +14,7 @@
 #include "app/onboard_led.h"
 #include "app/selfcheck.h"
 #include "services/cli.h"
+#include "services/datapipe.h"
 #include "services/ntp.h"
 #include "services/storage.h"
 #include "services/wifi.h"
@@ -27,9 +28,10 @@ void setup() {
 
   selfcheck::print();
   onboardLed.begin();
-  storage::begin();  // 配置与数据缓存的持久化（LittleFS，分区 lfs）
+  storage::begin();      // 配置与数据缓存的持久化（LittleFS，分区 lfs）
   wifi::begin();
   cli::begin();
+  datapipe::begin();     // 挂接整点回调：到点按设备配置自动拉取数据源
 
   if (!SCREEN_ATTACHED) {
     Serial.println("[屏] 未接屏（SCREEN_ATTACHED=false），跳过点屏，进入呼吸心跳");

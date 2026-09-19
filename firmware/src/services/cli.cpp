@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "datapipe.h"
 #include "github.h"
 #include "ntp.h"
 #include "storage.h"
@@ -27,8 +28,9 @@ void printHelp() {
   Serial.println("  gh user <login>          GitHub 用户（仓库数/关注者）");
   Serial.println("  gh repo <owner>/<repo>   GitHub 仓库（Stars/Forks）");
   Serial.println("  gh commits <owner>/<repo>  近 12 周提交序列");
-  Serial.println("  config show|user <l>|repo <o/r>  数据源配置（持久化，repo 传 - 清除）");
+  Serial.println("  config show|user <l>|repo <o/r>|token <t>  数据源配置（- 清除对应项）");
   Serial.println("  fs ls [dir]|cat <f>|rm <f>|format   文件系统调试");
+  Serial.println("  pipe                     立即执行一轮数据流水（同整点动作）");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -182,10 +184,10 @@ void cmdFs(char* rest) {
   }
 }
 
-// config show | config user <login> | config repo <owner/reo|->
+// config show | config user <l> | config repo <o/r>|- | config token <t>|-
 void cmdConfig(char* rest) {
   storage::Config c;
-  storage::loadConfig(c);  // 无文件时保持默认空值（出厂态）
+  storage::loadConfig(c);  // 无文件时自动带出厂默认
   char* sp = strchr(rest, ' ');
   char* arg = const_cast<char*>("");
   if (sp) {
@@ -193,17 +195,22 @@ void cmdConfig(char* rest) {
     arg = sp + 1;
   }
   if (!strcmp(rest, "show") || !*rest) {
-    Serial.printf("[配置] githubUser=%s · githubRepo=%s\n",
+    // token 只报状态不回显（串口/网页日志半公开环境）
+    Serial.printf("[配置] githubUser=%s · githubRepo=%s · token=%s\n",
                   c.githubUser.length() ? c.githubUser.c_str() : "（未配置）",
-                  c.githubRepo.length() ? c.githubRepo.c_str() : "（未配置）");
+                  c.githubRepo.length() ? c.githubRepo.c_str() : "（未配置）",
+                  c.githubToken.length() ? "已配置" : "未配置");
   } else if (!strcmp(rest, "user") && *arg) {
     c.githubUser = arg;
     Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
   } else if (!strcmp(rest, "repo") && *arg) {
     c.githubRepo = !strcmp(arg, "-") ? "" : String(arg);
     Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
+  } else if (!strcmp(rest, "token") && *arg) {
+    c.githubToken = !strcmp(arg, "-") ? "" : String(arg);
+    Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
   } else {
-    Serial.println("[CLI] 格式：config show | config user <l> | config repo <o/r>|-");
+    Serial.println("[CLI] 格式：config show | user <l> | repo <o/r>|- | token <t>|-");
   }
 }
 
@@ -225,6 +232,8 @@ void dispatch(char* line) {
     cmdConfig(rest);
   } else if (!strcmp(line, "fs")) {
     cmdFs(rest);
+  } else if (!strcmp(line, "pipe")) {
+    datapipe::runOnce("手动");
   } else if (!strcmp(line, "time")) {
     Serial.printf("[时间] %s（UTC+8）\n", ntp::timeString());
   } else if (!strcmp(line, "reboot")) {

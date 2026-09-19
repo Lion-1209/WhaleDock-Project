@@ -28,8 +28,9 @@ std::vector<String> listDir(const char* path);             // 一级条目（目
 
 // ---- 应用配置（/config.json）----
 struct Config {
-  String githubUser;  // github.user 数据源（空 = 未配置）
-  String githubRepo;  // github.repo 数据源 "owner/repo"（空 = 未配置）
+  String githubUser;   // github.user 数据源（空 = 未配置）
+  String githubRepo;   // github.repo 数据源 "owner/repo"（空 = 未配置）
+  String githubToken;  // GitHub PAT（空 = 匿名，60 次/h；配置后认证 5000 次/h）
 };
 bool loadConfig(Config& out);      // false = 尚无配置文件（出厂态）
 bool saveConfig(const Config& c);

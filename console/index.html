@@ -75,10 +75,16 @@
           <label>仓库（owner/repo，可粘贴完整地址）
             <input id="cfg-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
           </label>
+          <label>Token（可选，PAT，限额 60/h → 5000/h）
+            <input id="cfg-token" type="password" placeholder="留空 = 不修改；仅存设备，不回显" autocomplete="off">
+          </label>
+          <label class="inline"><input id="show-token" type="checkbox"> 显示 Token</label>
           <p class="hint">留空的项不修改。配置持久化在设备上（LittleFS），整点流水线将按此自动拉取。</p>
           <div class="row">
             <button type="submit" class="primary">保存配置</button>
+            <button type="button" id="btn-pipe">立即拉取</button>
             <button type="button" id="btn-cfg-clear-repo" class="danger">清除仓库</button>
+            <button type="button" id="btn-cfg-clear-token" class="danger">清除 Token</button>
           </div>
         </form>
       </section>

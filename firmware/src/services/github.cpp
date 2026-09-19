@@ -76,6 +76,12 @@ int16_t get(const String& path, String& payload) {
   http.setTimeout(10000);
   http.addHeader("User-Agent", "WhaleDock-Firmware");
   http.addHeader("Accept", "application/vnd.github+json");
+  // 配置了 PAT 则走认证（限额 60/h → 5000/h）；token 每次从配置读，
+  // 改配置即时生效。明文存于 config.json，与 Wi-Fi 密码同级的现阶段取舍
+  storage::Config cfg;
+  storage::loadConfig(cfg);
+  if (!cfg.githubToken.isEmpty())
+    http.addHeader("Authorization", "Bearer " + cfg.githubToken);
   const int16_t code = http.GET();
   if (code == HTTP_CODE_OK) payload = http.getString();
   http.end();
@@ -90,7 +96,8 @@ String errOf(int16_t code) {
     return s;
   }
   if (code == 202) return "HTTP 202：GitHub 统计计算中，稍后再试";
-  if (code == 403) return "HTTP 403：限额或被封（60 次/时/IP）";
+  if (code == 401) return "HTTP 401：token 无效或过期（config token - 可清除）";
+  if (code == 403) return "HTTP 403：限额或被封（匿名 60 次/时/IP，配 token 可至 5000）";
   String s = "HTTP ";
   s += code;
   return s;
