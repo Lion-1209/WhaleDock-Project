@@ -18,3 +18,6 @@ constexpr uint8_t BREATH_MIN = 2;                // 呼吸谷值亮度（隐约�
 // Wi-Fi（services/wifi）：断开退避重连间隔、单次连接超时
 constexpr uint32_t WIFI_RETRY_INTERVAL_MS = 15000;
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
+
+// 调度（services/ntp）：true 时整点调度改为 60s 周期（验收用），正式节拍必须 false
+constexpr bool SCHEDULE_DEBUG = false;

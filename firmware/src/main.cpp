@@ -14,6 +14,7 @@
 #include "app/onboard_led.h"
 #include "app/selfcheck.h"
 #include "services/cli.h"
+#include "services/ntp.h"
 #include "services/wifi.h"
 
 static OnboardLed onboardLed;
@@ -38,6 +39,7 @@ void setup() {
 void loop() {
   cli::poll();
   wifi::poll();
+  ntp::poll();  // 对时 + 整点调度（回调挂载点留给 A4 数据流水）
 
   // 呼吸灯兼任联网状态指示：绿 = 已连接，蓝 = 未连接/重连中
   const bool online = wifi::state() == wifi::State::Connected;

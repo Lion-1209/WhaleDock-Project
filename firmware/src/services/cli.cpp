@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "ntp.h"
 #include "wifi.h"
 
 namespace cli {
@@ -20,6 +21,7 @@ void printHelp() {
   Serial.println("  wifi status              连接状态");
   Serial.println("  wifi scan                扫描周边 AP（核对 SSID 可见性/编码）");
   Serial.println("  wifi clear               清除凭据");
+  Serial.println("  time                     当前时间与 NTP 同步状态");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -94,6 +96,8 @@ void dispatch(char* line) {
     printHelp();
   } else if (!strcmp(line, "wifi")) {
     cmdWifi(rest);
+  } else if (!strcmp(line, "time")) {
+    Serial.printf("[时间] %s（UTC+8）\n", ntp::timeString());
   } else if (!strcmp(line, "reboot")) {
     Serial.println("[CLI] 重启...");
     delay(100);  // 等 CDC 把这行送出去
