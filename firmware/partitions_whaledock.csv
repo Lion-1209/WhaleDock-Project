@@ -1,6 +1,12 @@
 # Name,   Type, SubType,  Offset,   Size
-# 头部数据区压缩对齐（指南原表 phy_init 与 ota_0 重叠，已勘误）：
-# nvs 16KB + otadata 8KB + phy 4KB = 0x9000~0x10000，ota_0 起点与指南一致
+# NOTE: ASCII-only comments in this file! PlatformIO's Python builder parses it
+# line by line using the OS locale codec (GBK on zh-CN Windows), so UTF-8
+# comments crash the build with UnicodeDecodeError at checkprogsize.
+#
+# 16MB flash layout: dual OTA (2 x 6.4MB) + LittleFS + assets + coredump.
+# Header alignment: the dev guide's original table overlapped phy_init/ota_0;
+# here nvs 16K + otadata 8K + phy 4K fill 0x9000..0x10000 so ota_0 keeps the
+# guide's 0x10000 start (see ESP32-S3 dev guide section 5 + errata in docs).
 nvs,      data, nvs,      0x9000,   0x4000
 otadata,  data, ota,      0xD000,   0x2000
 phy_init, data, phy,      0xF000,   0x1000

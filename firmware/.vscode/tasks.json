@@ -1,0 +1,71 @@
+{
+    // ============================================================
+    // 鲸屿 WhaleDock 固件任务（Terminal > Run Task，或 Ctrl+Shift+B 跑默认任务）
+    // 前提：VS Code 以 firmware/ 为工作区根目录打开（platformio.ini 所在处）
+    //
+    // 公共 options（文件级，全部任务继承）：
+    //   - shell 钉死 powershell -NoProfile：任务行为不随 VS Code 默认终端
+    //     （PowerShell / Git Bash / 其它）变化，也避开 profile 改写 PATH 的干扰
+    //   - pio 不依赖系统 PATH：penv\Scripts 已前置到任务进程 PATH
+    //   - PYTHONUTF8=1：强制构建器 Python 用 UTF-8 读文件（中文 Windows 默认
+    //     GBK，曾把分区表 CSV 的中文注释读崩，见 CSV 头注释）
+    // ============================================================
+    "version": "2.0.0",
+    "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+            "PATH": "${env:USERPROFILE}\\.platformio\\penv\\Scripts;${env:PATH}",
+            "PYTHONUTF8": "1"
+        },
+        "shell": {
+            "executable": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+            "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command"]
+        }
+    },
+    "tasks": [
+        {
+            "label": "编译：主程序 whaledock",
+            "detail": "pio run -e whaledock",
+            "type": "shell",
+            "command": "pio",
+            "args": ["run", "-e", "whaledock"],
+            "group": "build",
+            "problemMatcher": "$gcc"
+        },
+        {
+            "label": "烧录：主程序 whaledock",
+            "detail": "pio run -e whaledock -t upload（烧录前请先关闭串口监视，否则 COM 口被占）",
+            "type": "shell",
+            "command": "pio",
+            "args": ["run", "-e", "whaledock", "-t", "upload"],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": []
+        },
+        {
+            "label": "烧录+监视：主程序 whaledock",
+            "detail": "pio run -e whaledock -t upload -t monitor",
+            "type": "shell",
+            "command": "pio",
+            "args": ["run", "-e", "whaledock", "-t", "upload", "-t", "monitor"],
+            "problemMatcher": [],
+            "presentation": { "focus": true }
+        },
+        {
+            "label": "串口监视（115200，插 \"USB\" 口）",
+            "detail": "pio device monitor",
+            "type": "shell",
+            "command": "pio",
+            "args": ["device", "monitor"],
+            "problemMatcher": [],
+            "presentation": { "focus": true }
+        },
+        {
+            "label": "清理：构建产物",
+            "detail": "pio run -t clean",
+            "type": "shell",
+            "command": "pio",
+            "args": ["run", "-t", "clean"],
+            "problemMatcher": []
+        }
+    ]
+}
