@@ -1,0 +1,11 @@
+# Name,   Type, SubType,  Offset,   Size
+# 头部数据区压缩对齐（指南原表 phy_init 与 ota_0 重叠，已勘误）：
+# nvs 16KB + otadata 8KB + phy 4KB = 0x9000~0x10000，ota_0 起点与指南一致
+nvs,      data, nvs,      0x9000,   0x4000
+otadata,  data, ota,      0xD000,   0x2000
+phy_init, data, phy,      0xF000,   0x1000
+ota_0,    app,  ota_0,    0x10000,  0x640000
+ota_1,    app,  ota_1,    0x650000, 0x640000
+lfs,      data, spiffs,   0xC90000, 0x2F0000
+assets,   data, spiffs,   0xF80000, 0x70000
+coredump, data, coredump, 0xFF0000, 0x10000

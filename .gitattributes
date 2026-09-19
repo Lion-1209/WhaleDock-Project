@@ -1,0 +1,12 @@
+# 统一换行符：文本文件入库规范化为 LF，二进制不碰
+* text=auto
+
+# 二进制类型显式声明
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.stp binary
+*.dxf binary
