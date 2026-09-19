@@ -24,6 +24,10 @@
         <button id="btn-add">添加串口…</button>
         <button id="btn-disconnect" disabled>断开</button>
       </div>
+      <div class="row">
+        <span id="dev-time" class="dev-time">设备时间：—</span>
+        <button id="btn-time">查询时间</button>
+      </div>
       <div id="pick-modal" class="modal" hidden>
         <div class="modal-box">
           <h3>浏览器串口授权（仅首次）</h3>
@@ -51,10 +55,31 @@
         <div class="row">
           <button type="submit" class="primary">保存并连接</button>
           <button type="button" id="btn-status">状态查询</button>
+          <button type="button" id="btn-scan">扫描周边 Wi-Fi</button>
           <button type="button" id="btn-clear" class="danger">清除凭据</button>
           <button type="button" id="btn-reboot">重启设备</button>
         </div>
       </form>
+      <div id="scan-list" class="scan-list"></div>
+    </section>
+
+    <section class="card">
+      <h2>GitHub 数据</h2>
+      <label>用户 / 组织登录名
+        <input id="gh-user" type="text" placeholder="例如 torvalds 或 datawhalechina" autocomplete="off">
+      </label>
+      <div class="row">
+        <button type="button" id="btn-gh-user">查询用户</button>
+      </div>
+      <label>仓库（owner/repo）
+        <input id="gh-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
+      </label>
+      <div class="row">
+        <button type="button" id="btn-gh-repo">查询仓库</button>
+        <button type="button" id="btn-gh-commits">近 12 周提交</button>
+      </div>
+      <div id="gh-result" class="wifi-state">尚未查询</div>
+      <div id="gh-bars" class="bars"></div>
     </section>
 
     <section class="card log-card">

@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "github.h"
 #include "ntp.h"
 #include "wifi.h"
 
@@ -22,6 +23,9 @@ void printHelp() {
   Serial.println("  wifi scan                扫描周边 AP（核对 SSID 可见性/编码）");
   Serial.println("  wifi clear               清除凭据");
   Serial.println("  time                     当前时间与 NTP 同步状态");
+  Serial.println("  gh user <login>          GitHub 用户（仓库数/关注者）");
+  Serial.println("  gh repo <owner>/<repo>   GitHub 仓库（Stars/Forks）");
+  Serial.println("  gh commits <owner>/<repo>  近 12 周提交序列");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -84,6 +88,59 @@ void cmdWifi(char* rest) {
   }
 }
 
+// gh user <login> | gh repo <o>/<r> | gh commits <o>/<r>
+// 拉取为同步阻塞（超时 10s），命令期间心跳/呼吸暂停属预期
+void cmdGh(char* rest) {
+  if (wifi::state() != wifi::State::Connected) {
+    Serial.println("[GitHub] Wi-Fi 未连接（或连接中），稍后再试");
+    return;
+  }
+  const uint32_t t0 = millis();
+  if (!strncmp(rest, "user ", 5)) {
+    const github::UserStats u = github::fetchUser(rest + 5);
+    if (u.ok)
+      Serial.printf("[GitHub] 用户 %s：公开仓库 %d · 关注者 %d（耗时 %.1fs）\n",
+                    u.login.c_str(), u.publicRepos, u.followers,
+                    (millis() - t0) / 1000.0);
+    else
+      Serial.printf("[GitHub] 失败：%s（耗时 %.1fs）\n", u.error.c_str(),
+                    (millis() - t0) / 1000.0);
+  } else if (!strncmp(rest, "repo ", 5) || !strncmp(rest, "commits ", 8)) {
+    const bool commits = rest[0] == 'c';
+    char* slug = rest + (commits ? 8 : 5);
+    char* slash = strchr(slug, '/');
+    if (!slash || slash == slug || !slash[1]) {
+      Serial.println("[CLI] 格式：gh repo <owner>/<repo>");
+      return;
+    }
+    *slash = '\0';
+    const char* repo = slash + 1;
+    if (commits) {
+      const github::CommitActivity c = github::fetchCommitActivity(slug, repo);
+      if (!c.ok) {
+        Serial.printf("[GitHub] 失败：%s（耗时 %.1fs）\n", c.error.c_str(),
+                      (millis() - t0) / 1000.0);
+        return;
+      }
+      Serial.printf("[GitHub] %s/%s 近 %d 周提交（旧→新，耗时 %.1fs）：\n  ", slug,
+                    repo, (int)c.weeklyTotals.size(), (millis() - t0) / 1000.0);
+      for (const int w : c.weeklyTotals) Serial.printf("%d ", w);
+      Serial.printf("\n  合计 %d 次\n", c.total);
+    } else {
+      const github::RepoStats s = github::fetchRepo(slug, repo);
+      if (s.ok)
+        Serial.printf("[GitHub] 仓库 %s：Stars %d · Forks %d（耗时 %.1fs）\n",
+                      s.fullName.c_str(), s.stars, s.forks,
+                      (millis() - t0) / 1000.0);
+      else
+        Serial.printf("[GitHub] 失败：%s（耗时 %.1fs）\n", s.error.c_str(),
+                      (millis() - t0) / 1000.0);
+    }
+  } else {
+    Serial.println("[CLI] 未知子命令，见 help");
+  }
+}
+
 void dispatch(char* line) {
   if (!*line) return;
   char* sp = strchr(line, ' ');
@@ -96,6 +153,8 @@ void dispatch(char* line) {
     printHelp();
   } else if (!strcmp(line, "wifi")) {
     cmdWifi(rest);
+  } else if (!strcmp(line, "gh")) {
+    cmdGh(rest);
   } else if (!strcmp(line, "time")) {
     Serial.printf("[时间] %s（UTC+8）\n", ntp::timeString());
   } else if (!strcmp(line, "reboot")) {

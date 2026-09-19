@@ -145,6 +145,40 @@ button.danger { border-color: var(--red); color: var(--red); }
 .log .wifi { color: var(--green); }
 .log .page { color: var(--orange); }
 
+/* 设备时间行 */
+.dev-time { color: var(--dim); font-size: 13px; font-family: Consolas, monospace; }
+
+/* Wi-Fi 扫描结果：可点击回填 SSID */
+.scan-list { margin-top: 10px; display: grid; gap: 4px; }
+.scan-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.scan-item:hover { border-color: var(--accent); }
+.scan-item .meta { color: var(--dim); white-space: nowrap; }
+
+/* 近 12 周提交柱状图 */
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 64px;
+  margin-top: 10px;
+}
+.bar {
+  flex: 1;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  min-height: 3px;
+}
+
 .cmd-row input { flex: 1; margin-top: 0; }
 
 footer {

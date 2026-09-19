@@ -66,10 +66,74 @@ function appendLog(text) {
   if ($('autoscroll').checked) log.scrollTop = log.scrollHeight;
 }
 
-// 固件日志行 → 页面状态（兼容日志/状态查询两种格式）
+// 固件日志行 → 页面状态与卡片渲染（兼容日志/状态查询两种格式）
+let scanMode = false;   // [WiFi] 共 N 个 AP： 之后进入，遇到下一行 [ 开头退出
+let commitMode = false;  // gh commits 的数字行
+const gh = { weeks: [], total: 0 };
+
 function parseLine(line) {
+  // ---- 设备时间 ----
+  let m = line.match(/^\[时间\] (.+)$/);
+  if (m) {
+    $('dev-time').textContent = `设备时间：${m[1]}`;
+    return;
+  }
+
+  // ---- GitHub 三类结果 ----
+  if ((m = line.match(/用户 (.+?)：公开仓库 (\d+) · 关注者 (\d+)/))) {
+    $('gh-result').textContent = `用户 ${m[1]}：公开仓库 ${m[2]} · 关注者 ${m[3]}`;
+    $('gh-result').className = 'wifi-state ok';
+    return;
+  }
+  if ((m = line.match(/仓库 (.+?)：Stars (\d+) · Forks (\d+)/))) {
+    $('gh-result').textContent = `仓库 ${m[1]}：Stars ${m[2]} · Forks ${m[3]}`;
+    $('gh-result').className = 'wifi-state ok';
+    return;
+  }
+  if (/近 \d+ 周提交/.test(line)) {
+    commitMode = true;
+    gh.weeks = [];
+    gh.total = 0;
+    return;
+  }
+  if (commitMode && /^\s*\d+(\s+\d+)*\s*$/.test(line)) {
+    gh.weeks = line.trim().split(/\s+/).map(Number);
+    return;
+  }
+  if ((m = line.match(/合计 (\d+) 次/))) {
+    commitMode = false;
+    gh.total = Number(m[1]);
+    renderGhBars();
+    return;
+  }
+  if ((m = line.match(/^\[GitHub\] 失败：(.+)$/))) {
+    $('gh-result').textContent = `失败：${m[1]}`;
+    $('gh-result').className = 'wifi-state warn';
+    return;
+  }
+  if (/格式：gh repo/.test(line) || /^\[GitHub\] Wi-Fi 未连接/.test(line)) {
+    $('gh-result').textContent = line.replace(/^\[(GitHub|CLI)\] /, '');
+    $('gh-result').className = 'wifi-state warn';
+    return;
+  }
+
+  // ---- Wi-Fi 扫描结果 ----
+  if ((m = line.match(/^\[WiFi\] 共 (\d+) 个 AP/))) {
+    scanMode = true;
+    $('scan-list').innerHTML = '';
+    if (Number(m[1]) === 0) $('scan-list').textContent = '（未扫到任何 AP）';
+    return;
+  }
+  if (scanMode && !line.startsWith('[') &&
+      (m = line.match(/^\s*\d+\s+ch\s*(\d+)\s+(-?\d+)\s*dBm\s+(.+)$/))) {
+    const ssid = m[3].replace(/\s*\(hex:[0-9A-F]*\)\s*$/, '');
+    addScanItem(ssid, m[1], m[2]);
+    return;
+  }
+  if (scanMode && line.startsWith('[')) scanMode = false;
+
+  // ---- Wi-Fi 连接状态（原有逻辑） ----
   if (!line.startsWith('[WiFi]')) return;
-  let m;
   if ((m = line.match(/凭据已保存（NVS）：(.+)$/))) {
     wifi.saved = m[1];
   } else if ((m = line.match(/已连接：(\S+)\s+IP=(\S+)/))) {
@@ -139,9 +203,10 @@ async function refreshGranted() {
 }
 
 function afterConnected() {
-  appendLog('[页面] 串口已打开（115200）。查询设备 Wi-Fi 状态…');
+  appendLog('[页面] 串口已打开（115200）。查询设备状态…');
   setState('unprovisioned');
   link.send('wifi status');
+  link.send('time');
   $('btn-connect').disabled = true;
   $('btn-disconnect').disabled = false;
 }
@@ -249,6 +314,76 @@ $('btn-reboot').addEventListener('click', cmd('reboot'));
 
 $('show-pass').addEventListener('change', (e) => {
   $('pass').type = e.target.checked ? 'text' : 'password';
+});
+
+// ---- 扫描结果 / 柱状图渲染 ----
+function addScanItem(ssid, ch, rssi) {
+  const item = document.createElement('div');
+  item.className = 'scan-item';
+  const name = document.createElement('span');
+  name.textContent = ssid;
+  const meta = document.createElement('span');
+  meta.className = 'meta';
+  meta.textContent = `ch${ch} · ${rssi} dBm`;
+  item.append(name, meta);
+  item.title = '点击回填到配网表单';
+  item.addEventListener('click', () => {
+    $('ssid').value = ssid;
+    appendLog(`[页面] 已回填 SSID：${ssid}`);
+  });
+  $('scan-list').appendChild(item);
+}
+
+function renderGhBars() {
+  $('gh-result').textContent =
+    `近 ${gh.weeks.length} 周提交（旧→新）：合计 ${gh.total} 次（悬停看每周数值）`;
+  $('gh-result').className = 'wifi-state ok';
+  const max = Math.max(...gh.weeks, 1);
+  const box = $('gh-bars');
+  box.innerHTML = '';
+  gh.weeks.forEach((w, i) => {
+    const b = document.createElement('div');
+    b.className = 'bar';
+    b.style.height = `${Math.max(4, Math.round((w / max) * 100))}%`;
+    b.title = `第 ${i + 1} 周：${w} 次`;
+    box.appendChild(b);
+  });
+}
+
+// 仓库输入规范化：容忍完整 URL / @前缀 / 多余路径，统一为 owner/repo
+function normRepo(v) {
+  v = v.trim().replace(/^@+/, '');
+  v = v.replace(/^(https?:\/\/)?(www\.)?github\.com\//i, '');
+  const parts = v.split(/[\/\s]+/).filter(Boolean);
+  return parts.length >= 2 ? `${parts[0]}/${parts[1]}` : null;
+}
+
+function ghWarn(text) {
+  $('gh-result').textContent = text;
+  $('gh-result').className = 'wifi-state warn';
+}
+
+$('btn-time').addEventListener('click', cmd('time'));
+$('btn-scan').addEventListener('click', () => {
+  $('scan-list').innerHTML = '<div class="scan-item"><span>扫描中（约 2-5s）…</span></div>';
+  cmd('wifi scan')();
+});
+$('btn-gh-user').addEventListener('click', () => {
+  const v = $('gh-user').value.trim().replace(/^@+/, '');
+  if (!v) { ghWarn('请输入用户 / 组织登录名'); return; }
+  cmd(`gh user ${v}`)();
+});
+$('btn-gh-repo').addEventListener('click', () => {
+  const r = normRepo($('gh-repo').value);
+  if (!r) { ghWarn('格式：owner/repo（也可直接粘贴仓库页地址）'); return; }
+  $('gh-repo').value = r;  // 规范化回显
+  cmd(`gh repo ${r}`)();
+});
+$('btn-gh-commits').addEventListener('click', () => {
+  const r = normRepo($('gh-repo').value);
+  if (!r) { ghWarn('格式：owner/repo（也可直接粘贴仓库页地址）'); return; }
+  $('gh-repo').value = r;
+  cmd(`gh commits ${r}`)();
 });
 
 appendLog('[页面] 就绪。已授权过串口的话直接点「连接设备」（免弹框）');

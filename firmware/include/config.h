@@ -21,3 +21,8 @@ constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
 
 // 调度（services/ntp）：true 时整点调度改为 60s 周期（验收用），正式节拍必须 false
 constexpr bool SCHEDULE_DEBUG = false;
+
+// GitHub（services/github）：API 基址 + 可选代理前缀（应对国内可达性，空 = 直连；
+// 填形如 "http://192.168.1.100:8080/gh/" 的中转时走普通 HTTP）
+constexpr const char* GITHUB_API_BASE = "https://api.github.com";
+constexpr const char* GITHUB_PROXY_PREFIX = "";
