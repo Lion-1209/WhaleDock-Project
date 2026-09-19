@@ -9,6 +9,9 @@
 
 import { SerialLink } from './serial.js';
 
+// 出厂默认数据源：与固件 include/config.h 的 GITHUB_DEFAULT_USER 保持同步
+const GH_DEFAULT_USER = 'datawhalechina';
+
 const $ = (id) => document.getElementById(id);
 const link = new SerialLink();
 
@@ -71,7 +74,102 @@ let scanMode = false;   // [WiFi] 共 N 个 AP： 之后进入，遇到下一行
 let commitMode = false;  // gh commits 的数字行
 const gh = { weeks: [], total: 0 };
 
+// ---- 数据源配置 / 存储解析 ----
+const fstate = {
+  lsMode: false, lsDir: '',
+  files: new Map(),          // 完整路径 → 'file' | 'dir'
+  catPath: null, catMode: false, catBuf: '',
+};
+
+function parseCfg(line) {
+  let m;
+  if ((m = line.match(/^\[配置\] githubUser=(.*) · githubRepo=(.*)$/))) {
+    const u = m[1], r = m[2];
+    const unset = (s) => s.includes('未配置');
+    $('cfg-state').textContent = `当前：用户 ${u} · 仓库 ${r}`;
+    $('cfg-state').className = 'wifi-state' + (!unset(u) ? ' ok' : '');
+    if (!unset(u) && !$('cfg-user').value) $('cfg-user').value = u;
+    if (!unset(r) && !$('cfg-repo').value) $('cfg-repo').value = r;
+    return true;
+  }
+  if ((m = line.match(/^\[FS\] (\S+)：\d+ 项$/))) {
+    fstate.lsMode = true;
+    fstate.lsDir = m[1];
+    return true;
+  }
+  if ((m = line.match(/^\[FS\] (\S+)（\d+ B）：$/))) {
+    if (fstate.catPath === m[1]) {
+      fstate.catMode = true;
+      fstate.catBuf = '';
+    }
+    return true;
+  }
+  if (/^\[FS\] \S+ 不存在/.test(line)) {
+    $('fs-content').textContent = '文件不存在';
+    return true;
+  }
+  if (/^\[FS\]/.test(line)) {  // 挂载失败/写入失败等：关闭采集态
+    fstate.lsMode = false;
+    fstate.catMode = false;
+    return false;
+  }
+  if (fstate.lsMode) {
+    const name = line.trim();
+    if (/^\s{2}\S/.test(line) && name && !/\s/.test(name)) {
+      const full = fstate.lsDir === '/' ? '/' + name : fstate.lsDir + '/' + name;
+      fstate.files.set(full, name.endsWith('/') ? 'dir' : 'file');
+      renderFsList();
+      return true;
+    }
+    fstate.lsMode = false;  // 首个非条目行结束本轮流询
+  }
+  if (fstate.catMode) {
+    if (line.startsWith('[') || line.startsWith('>')) {
+      fstate.catMode = false;
+      $('fs-content').textContent = fstate.catBuf.trim();
+    } else {
+      fstate.catBuf += line + '\n';
+    }
+    return true;
+  }
+  return false;
+}
+
+function renderFsList() {
+  const box = $('fs-list');
+  box.innerHTML = '';
+  const paths = [...fstate.files.keys()].sort((a, b) => {
+    const da = fstate.files.get(a) === 'dir', db = fstate.files.get(b) === 'dir';
+    return da !== db ? (da ? -1 : 1) : a.localeCompare(b);
+  });
+  if (!paths.length) {
+    box.innerHTML = '<div class="scan-item"><span>（空，点「刷新文件列表」）</span></div>';
+    return;
+  }
+  for (const p of paths) {
+    const isDir = fstate.files.get(p) === 'dir';
+    const item = document.createElement('div');
+    item.className = 'scan-item';
+    const name = document.createElement('span');
+    name.textContent = (isDir ? '📁 ' : '📄 ') + p.replace(/\/$/, '/') + (isDir ? '' : '');
+    item.appendChild(name);
+    item.title = isDir ? '点击进入目录' : '点击查看内容';
+    item.addEventListener('click', () => {
+      if (isDir) cmd(`fs ls ${p}`)();
+      else {
+        fstate.catPath = p;
+        $('fs-content').textContent = `读取 ${p} …`;
+        cmd(`fs cat ${p}`)();
+      }
+    });
+    box.appendChild(item);
+  }
+}
+
 function parseLine(line) {
+  // ---- 配置 / 存储（先于其它解析，含多行采集态） ----
+  if (parseCfg(line)) return;
+
   // ---- 设备时间 ----
   let m = line.match(/^\[时间\] (.+)$/);
   if (m) {
@@ -207,6 +305,7 @@ function afterConnected() {
   setState('unprovisioned');
   link.send('wifi status');
   link.send('time');
+  link.send('config show');
   $('btn-connect').disabled = true;
   $('btn-disconnect').disabled = false;
 }
@@ -386,5 +485,53 @@ $('btn-gh-commits').addEventListener('click', () => {
   cmd(`gh commits ${r}`)();
 });
 
+// ---- 数据源配置 / 存储 事件 ----
+$('cfg-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const u = $('cfg-user').value.trim();
+  const r = $('cfg-repo').value.trim();
+  let sent = false;
+  if (u) { cmd(`config user ${u}`)(); sent = true; }
+  if (r) {
+    const norm = normRepo(r);
+    if (!norm) {
+      $('cfg-state').textContent = '仓库格式：owner/repo（也可粘贴完整地址）';
+      $('cfg-state').className = 'wifi-state warn';
+      return;
+    }
+    $('cfg-repo').value = norm;
+    cmd(`config repo ${norm}`)();
+    sent = true;
+  }
+  if (!sent) {
+    $('cfg-state').textContent = '请至少填写一项（留空 = 不修改）';
+    $('cfg-state').className = 'wifi-state warn';
+  }
+});
+$('btn-cfg-clear-repo').addEventListener('click', () => {
+  $('cfg-repo').value = '';
+  cmd('config repo -')();
+});
+$('btn-fs-refresh').addEventListener('click', () => {
+  fstate.files.clear();
+  renderFsList();
+  $('fs-content').textContent = '';
+  cmd('fs ls /')();
+  cmd('fs ls /cache')();
+});
+$('btn-fs-format').addEventListener('click', () => {
+  if (!confirm('确认格式化 LittleFS？配置与缓存将全部清空。')) return;
+  fstate.files.clear();
+  renderFsList();
+  $('fs-content').textContent = '';
+  cmd('fs format')();
+  cmd('fs ls /')();
+});
+
 appendLog('[页面] 就绪。已授权过串口的话直接点「连接设备」（免弹框）');
 refreshGranted();
+
+// 初始展示出厂默认数据源（设备连接后由实际配置覆盖）
+$('cfg-state').textContent = `出厂默认：用户 ${GH_DEFAULT_USER} · 仓库（未配置）`;
+if (!$('cfg-user').value) $('cfg-user').value = GH_DEFAULT_USER;
+if (!$('gh-user').value) $('gh-user').value = GH_DEFAULT_USER;

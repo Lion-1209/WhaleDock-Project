@@ -25,6 +25,7 @@ struct UserStats {
   String login;
   int publicRepos = 0;
   int followers = 0;
+  String fetchedAt;  // 拉取时刻（NTP 已同步时；空 = 未对时）
   String error;
 };
 
@@ -33,6 +34,7 @@ struct RepoStats {
   String fullName;
   int stars = 0;
   int forks = 0;
+  String fetchedAt;
   String error;
 };
 
@@ -40,11 +42,18 @@ struct CommitActivity {
   bool ok = false;
   std::vector<int> weeklyTotals;  // 最近 12 周的每周提交数（旧 → 新）
   int total = 0;                  // 12 周合计
+  String fetchedAt;
   String error;
 };
 
 UserStats fetchUser(const char* login);
 RepoStats fetchRepo(const char* owner, const char* repo);
 CommitActivity fetchCommitActivity(const char* owner, const char* repo);
+
+// 缓存回读（A4 断网兜底渲染用）：成功返回 true 并填充 fetchedAt；
+// 拉取成功即自动落盘（/cache/*.json），无需调用方操心写缓存
+bool loadCachedUser(UserStats& out);
+bool loadCachedRepo(RepoStats& out);
+bool loadCachedCommits(CommitActivity& out);
 
 }  // namespace github

@@ -26,3 +26,8 @@ constexpr bool SCHEDULE_DEBUG = false;
 // 填形如 "http://192.168.1.100:8080/gh/" 的中转时走普通 HTTP）
 constexpr const char* GITHUB_API_BASE = "https://api.github.com";
 constexpr const char* GITHUB_PROXY_PREFIX = "";
+
+// 数据源出厂默认（storage::Config 无配置文件时生效）。
+// 注意用 datawhalechina：GitHub 字面 "datawhale" 是 0 仓库空账号（勘误 #6）。
+// 改动此处须同步 console/js/app.js 的 GH_DEFAULT_USER
+constexpr const char* GITHUB_DEFAULT_USER = "datawhalechina";

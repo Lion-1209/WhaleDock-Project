@@ -5,6 +5,7 @@
 
 #include "github.h"
 #include "ntp.h"
+#include "storage.h"
 #include "wifi.h"
 
 namespace cli {
@@ -26,6 +27,8 @@ void printHelp() {
   Serial.println("  gh user <login>          GitHub 用户（仓库数/关注者）");
   Serial.println("  gh repo <owner>/<repo>   GitHub 仓库（Stars/Forks）");
   Serial.println("  gh commits <owner>/<repo>  近 12 周提交序列");
+  Serial.println("  config show|user <l>|repo <o/r>  数据源配置（持久化，repo 传 - 清除）");
+  Serial.println("  fs ls [dir]|cat <f>|rm <f>|format   文件系统调试");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -141,6 +144,69 @@ void cmdGh(char* rest) {
   }
 }
 
+// fs ls [dir] | fs cat <path> | fs rm <path> | fs format
+void cmdFs(char* rest) {
+  char* sp = strchr(rest, ' ');
+  char* arg = const_cast<char*>("");
+  if (sp) {
+    *sp = '\0';
+    arg = sp + 1;
+  }
+  if (!strcmp(rest, "ls")) {
+    const char* dir = *arg ? arg : "/";
+    const auto names = storage::listDir(dir);
+    Serial.printf("[FS] %s：%zu 项\n", dir, names.size());
+    for (const String& n : names) Serial.printf("  %s\n", n.c_str());
+  } else if (!strcmp(rest, "cat")) {
+    if (!*arg) {
+      Serial.println("[CLI] 格式：fs cat <路径>");
+      return;
+    }
+    if (!storage::exists(arg)) {
+      Serial.printf("[FS] %s 不存在\n", arg);
+      return;
+    }
+    const String c = storage::readFile(arg);
+    Serial.printf("[FS] %s（%u B）：\n%s\n", arg, c.length(), c.c_str());
+  } else if (!strcmp(rest, "rm")) {
+    if (!*arg) {
+      Serial.println("[CLI] 格式：fs rm <路径>");
+      return;
+    }
+    Serial.println(storage::removeFile(arg) ? "[FS] 已删除" : "[FS] 删除失败（不存在？）");
+  } else if (!strcmp(rest, "format")) {
+    Serial.println(storage::format() ? "[FS] 已格式化（配置与缓存全部清空）"
+                                     : "[FS] 格式化失败");
+  } else {
+    Serial.println("[CLI] 未知子命令，见 help");
+  }
+}
+
+// config show | config user <login> | config repo <owner/reo|->
+void cmdConfig(char* rest) {
+  storage::Config c;
+  storage::loadConfig(c);  // 无文件时保持默认空值（出厂态）
+  char* sp = strchr(rest, ' ');
+  char* arg = const_cast<char*>("");
+  if (sp) {
+    *sp = '\0';
+    arg = sp + 1;
+  }
+  if (!strcmp(rest, "show") || !*rest) {
+    Serial.printf("[配置] githubUser=%s · githubRepo=%s\n",
+                  c.githubUser.length() ? c.githubUser.c_str() : "（未配置）",
+                  c.githubRepo.length() ? c.githubRepo.c_str() : "（未配置）");
+  } else if (!strcmp(rest, "user") && *arg) {
+    c.githubUser = arg;
+    Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
+  } else if (!strcmp(rest, "repo") && *arg) {
+    c.githubRepo = !strcmp(arg, "-") ? "" : String(arg);
+    Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
+  } else {
+    Serial.println("[CLI] 格式：config show | config user <l> | config repo <o/r>|-");
+  }
+}
+
 void dispatch(char* line) {
   if (!*line) return;
   char* sp = strchr(line, ' ');
@@ -155,6 +221,10 @@ void dispatch(char* line) {
     cmdWifi(rest);
   } else if (!strcmp(line, "gh")) {
     cmdGh(rest);
+  } else if (!strcmp(line, "config")) {
+    cmdConfig(rest);
+  } else if (!strcmp(line, "fs")) {
+    cmdFs(rest);
   } else if (!strcmp(line, "time")) {
     Serial.printf("[时间] %s（UTC+8）\n", ntp::timeString());
   } else if (!strcmp(line, "reboot")) {

@@ -7,10 +7,51 @@
 #include <WiFiClientSecure.h>
 
 #include "config.h"
+#include "ntp.h"
+#include "storage.h"
 
 namespace github {
 
 namespace {
+
+// 拉取成功即落盘（storage 原子写），fetchedAt 供断网兜底渲染的"数据截至"角标
+void cacheUser(const UserStats& u) {
+  JsonDocument doc;
+  doc["login"] = u.login;
+  doc["public_repos"] = u.publicRepos;
+  doc["followers"] = u.followers;
+  doc["fetchedAt"] = u.fetchedAt;
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache("user", out);
+}
+
+void cacheRepo(const RepoStats& r) {
+  JsonDocument doc;
+  doc["full_name"] = r.fullName;
+  doc["stars"] = r.stars;
+  doc["forks"] = r.forks;
+  doc["fetchedAt"] = r.fetchedAt;
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache("repo", out);
+}
+
+void cacheCommits(const CommitActivity& c) {
+  JsonDocument doc;
+  JsonArray weeks = doc["weeklyTotals"].to<JsonArray>();
+  for (const int w : c.weeklyTotals) weeks.add(w);
+  doc["total"] = c.total;
+  doc["fetchedAt"] = c.fetchedAt;
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache("commits", out);
+}
+
+String nowStamp() {
+  return ntp::synced() ? String(ntp::timeString()) : String("");
+}
+
 
 // 统一 GET：成功返回 200 且填充 payload；返回值<0 为网络层错误，>0 为 HTTP 状态码
 int16_t get(const String& path, String& payload) {
@@ -75,6 +116,8 @@ UserStats fetchUser(const char* login) {
   r.login = doc["login"] | login;
   r.publicRepos = doc["public_repos"] | 0;
   r.followers = doc["followers"] | 0;
+  r.fetchedAt = nowStamp();
+  cacheUser(r);
   return r;
 }
 
@@ -96,6 +139,8 @@ RepoStats fetchRepo(const char* owner, const char* repo) {
   r.fullName = doc["full_name"] | r.fullName;
   r.stars = doc["stargazers_count"] | 0;
   r.forks = doc["forks_count"] | 0;
+  r.fetchedAt = nowStamp();
+  cacheRepo(r);
   return r;
 }
 
@@ -127,7 +172,51 @@ CommitActivity fetchCommitActivity(const char* owner, const char* repo) {
     r.weeklyTotals.push_back(t);
     r.total += t;
   }
+  r.fetchedAt = nowStamp();
+  cacheCommits(r);
   return r;
+}
+
+// ---- 缓存回读（A4 断网兜底渲染用） ----
+
+bool loadCachedUser(UserStats& out) {
+  const String s = storage::loadCache("user");
+  if (!s.length()) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, s)) return false;
+  out.ok = true;
+  out.login = doc["login"] | "";
+  out.publicRepos = doc["public_repos"] | 0;
+  out.followers = doc["followers"] | 0;
+  out.fetchedAt = doc["fetchedAt"] | "";
+  return true;
+}
+
+bool loadCachedRepo(RepoStats& out) {
+  const String s = storage::loadCache("repo");
+  if (!s.length()) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, s)) return false;
+  out.ok = true;
+  out.fullName = doc["full_name"] | "";
+  out.stars = doc["stars"] | 0;
+  out.forks = doc["forks"] | 0;
+  out.fetchedAt = doc["fetchedAt"] | "";
+  return true;
+}
+
+bool loadCachedCommits(CommitActivity& out) {
+  const String s = storage::loadCache("commits");
+  if (!s.length()) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, s)) return false;
+  JsonArray weeks = doc["weeklyTotals"];
+  if (weeks.isNull()) return false;
+  out.ok = true;
+  for (JsonVariant v : weeks) out.weeklyTotals.push_back(v | 0);
+  out.total = doc["total"] | 0;
+  out.fetchedAt = doc["fetchedAt"] | "";
+  return true;
 }
 
 }  // namespace github

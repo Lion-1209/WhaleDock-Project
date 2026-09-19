@@ -44,25 +44,30 @@ h2 { font-size: 15px; margin: 0 0 10px; padding-left: 9px; border-left: 3px soli
 
 .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
-/* ---- 双栏主布局：左控制 / 右日志 ---- */
+/* ---- 仪表盘网格：控制卡 2×2 + 存储跨两列，日志右侧通栏 ---- */
 main {
-  max-width: 1500px;
+  max-width: 1560px;
   margin: 0 auto;
   padding: 16px 20px 32px;
   display: grid;
-  grid-template-columns: minmax(360px, 430px) 1fr;
+  grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr) minmax(420px, 1.25fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
 }
 
-.col-left { display: grid; gap: 16px; }
+.c-device { grid-column: 1; grid-row: 1; }
+.c-wifi   { grid-column: 2; grid-row: 1; }
+.c-config { grid-column: 1; grid-row: 2; }
+.c-gh     { grid-column: 2; grid-row: 2; }
+.c-store  { grid-column: 1 / span 2; grid-row: 3; }
+.log-card { grid-column: 3; grid-row: 1 / span 3; position: sticky; top: 70px; }
 
-.col-right { display: flex; }
-
-/* 卡片色条分区 */
+.log-card { display: flex; flex-direction: column; min-width: 0; }
 .c-device h2 { border-color: var(--accent); }
 .c-wifi h2 { border-color: var(--green); }
+.c-config h2 { border-color: #b48cff; }
 .c-gh h2 { border-color: var(--orange); }
+.c-store h2 { border-color: #9aa5b1; }
 .c-log h2 { border-color: var(--teal); }
 
 .card {
@@ -75,6 +80,7 @@ main {
 .hint { color: var(--dim); font-size: 13px; margin: 6px 0; }
 
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+.row.tight { margin-top: 0; }
 
 label { display: block; margin: 8px 0; }
 label.inline { display: inline-flex; align-items: center; gap: 6px; color: var(--dim); font-size: 13px; }
@@ -165,6 +171,22 @@ button.ghost { padding: 4px 10px; font-size: 12.5px; }
   min-height: 3px;
 }
 
+/* 存储卡：文件内容查看 */
+.fs-content {
+  background: #0b0f13;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin: 8px 0 0;
+  max-height: 180px;
+  overflow: auto;
+  font: 12px/1.5 Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--text);
+}
+.fs-content:empty { display: none; }
+
 /* ---- 日志台：粘性、占满视口高度 ---- */
 .log-card {
   position: sticky;
@@ -221,10 +243,19 @@ footer {
   padding: 10px 0 22px;
 }
 
-/* ---- 窄屏：退回单列 ---- */
-@media (max-width: 960px) {
+/* ---- 窄屏：先退为两栏卡片 + 日志通栏，再退单列 ---- */
+@media (max-width: 1240px) {
+  main { grid-template-columns: 1fr 1fr; }
+  .c-device, .c-wifi, .c-config, .c-gh, .c-store, .log-card {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .c-store { grid-column: 1 / -1; }
+  .log-card { grid-column: 1 / -1; position: static; }
+  .log { height: 320px; }
+}
+
+@media (max-width: 760px) {
   main { grid-template-columns: 1fr; }
-  .log-card { position: static; }
-  .log { height: 340px; }
   header { position: static; }
 }

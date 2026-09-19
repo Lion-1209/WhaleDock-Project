@@ -17,8 +17,7 @@
   </header>
 
   <main>
-    <!-- 左列：控制 -->
-    <div class="col-left">
+    <!-- 仪表盘网格：控制卡 2×2 + 存储跨列，日志右区通栏（见 style.css 布局规则） -->
 
       <section class="card c-device">
         <h2>设备连接</h2>
@@ -66,6 +65,24 @@
         <div id="scan-list" class="scan-list"></div>
       </section>
 
+      <section class="card c-config">
+        <h2>数据源配置</h2>
+        <div id="cfg-state" class="wifi-state">连接设备后显示当前配置</div>
+        <form id="cfg-form">
+          <label>GitHub 用户 / 组织
+            <input id="cfg-user" type="text" placeholder="例如 datawhalechina" autocomplete="off">
+          </label>
+          <label>仓库（owner/repo，可粘贴完整地址）
+            <input id="cfg-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
+          </label>
+          <p class="hint">留空的项不修改。配置持久化在设备上（LittleFS），整点流水线将按此自动拉取。</p>
+          <div class="row">
+            <button type="submit" class="primary">保存配置</button>
+            <button type="button" id="btn-cfg-clear-repo" class="danger">清除仓库</button>
+          </div>
+        </form>
+      </section>
+
       <section class="card c-gh">
         <h2>GitHub 数据</h2>
         <label>用户 / 组织登录名
@@ -85,11 +102,18 @@
         <div id="gh-bars" class="bars"></div>
       </section>
 
-    </div>
+      <section class="card c-store">
+        <h2>存储（LittleFS）</h2>
+        <div class="row tight">
+          <button type="button" id="btn-fs-refresh">刷新文件列表</button>
+          <button type="button" id="btn-fs-format" class="danger">格式化…</button>
+        </div>
+        <p class="hint">目录可点击进入，文件可点击查看内容（config.json / cache/*.json）。</p>
+        <div id="fs-list" class="scan-list"></div>
+        <pre id="fs-content" class="fs-content"></pre>
+    </section>
 
-    <!-- 右列：日志台 -->
-    <div class="col-right">
-      <section class="card c-log log-card">
+    <section class="card c-log log-card">
         <h2>设备日志</h2>
         <div id="log" class="log"></div>
         <div class="row cmd-row">
@@ -98,7 +122,6 @@
           <label class="inline"><input id="autoscroll" type="checkbox" checked> 自动滚动</label>
         </div>
       </section>
-    </div>
   </main>
 
   <footer>零后端 · Web Serial 直连 · 协议为固件串口 CLI（services/cli）</footer>

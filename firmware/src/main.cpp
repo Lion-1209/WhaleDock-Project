@@ -15,6 +15,7 @@
 #include "app/selfcheck.h"
 #include "services/cli.h"
 #include "services/ntp.h"
+#include "services/storage.h"
 #include "services/wifi.h"
 
 static OnboardLed onboardLed;
@@ -26,6 +27,7 @@ void setup() {
 
   selfcheck::print();
   onboardLed.begin();
+  storage::begin();  // 配置与数据缓存的持久化（LittleFS，分区 lfs）
   wifi::begin();
   cli::begin();
 
