@@ -6,6 +6,9 @@
 
 #include <stdint.h>
 
+// 固件版本（OTA 升级前后在日志/网页可见；发版必须递增）
+constexpr const char* FW_VERSION = "0.2.0";
+
 // 屏未到货 = false：跳过点屏，只跑板级自检 + 呼吸心跳；屏到货改 true
 constexpr bool SCREEN_ATTACHED = false;
 
@@ -21,6 +24,9 @@ constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 30000;
 
 // 调度（services/ntp）：true 时整点调度改为 60s 周期（验收用），正式节拍必须 false
 constexpr bool SCHEDULE_DEBUG = false;
+
+// OTA（services/ota）：新固件"待验证"状态健康运行超时后自动确认（回滚点清除）
+constexpr uint32_t OTA_CONFIRM_MS = 90000;
 
 // GitHub（services/github）：API 基址 + 可选代理前缀（应对国内可达性，空 = 直连；
 // 填形如 "http://192.168.1.100:8080/gh/" 的中转时走普通 HTTP）

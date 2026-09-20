@@ -167,9 +167,38 @@ function renderFsList() {
   }
 }
 
+// ---- 固件版本 / OTA 解析与渲染 ----
+let fwVersion = '';
+
+function setOta(text, warn) {
+  $('ota-state').textContent = text;
+  $('ota-state').className = 'wifi-state' + (warn ? ' warn' : '');
+}
+
+function parseOta(line) {
+  let m;
+  if ((m = line.match(/^\[固件\] .*v(\S+)/))) {
+    fwVersion = m[1];
+    setOta(`当前固件 v${fwVersion} · 升级后版本见日志`);
+    return true;
+  }
+  if ((m = line.match(/^\[OTA\] 进度 (\d+)%/))) {
+    $('ota-progress').style.width = m[1] + '%';
+    setOta(`下载并写入中 ${m[1]}%`);
+    return true;
+  }
+  if ((m = line.match(/^\[OTA\] (.+)$/))) {
+    setOta(m[1], /失败|无效|不完整|中止/.test(m[1]));
+    return true;
+  }
+  return false;
+}
+
 function parseLine(line) {
   // ---- 配置 / 存储（先于其它解析，含多行采集态） ----
   if (parseCfg(line)) return;
+  // ---- 固件版本 / OTA ----
+  if (parseOta(line)) return;
 
   // ---- 设备时间 ----
   let m = line.match(/^\[时间\] (.+)$/);
@@ -307,6 +336,7 @@ function afterConnected() {
   link.send('wifi status');
   link.send('time');
   link.send('config show');
+  link.send('ota status');
   $('btn-connect').disabled = true;
   $('btn-disconnect').disabled = false;
 }
@@ -541,6 +571,23 @@ $('btn-fs-format').addEventListener('click', () => {
   $('fs-content').textContent = '';
   cmd('fs format')();
   cmd('fs ls /')();
+});
+
+// ---- OTA 事件 ----
+$('btn-ota').addEventListener('click', () => {
+  const u = $('ota-url').value.trim();
+  if (!/^https?:\/\/\S+$/.test(u)) {
+    setOta('地址须为 http(s) 的 .bin 直链', true);
+    return;
+  }
+  $('ota-progress').style.width = '0%';
+  setOta('开始升级：下载 + 写入期间设备暂停响应（看日志区），完成后自动重启');
+  cmd(`ota ${u}`)();
+});
+$('btn-ota-confirm').addEventListener('click', cmd('ota confirm'));
+$('btn-ota-rollback').addEventListener('click', () => {
+  if (!confirm('确认回滚到上一分区固件？设备将重启。')) return;
+  cmd('ota rollback')();
 });
 
 appendLog('[页面] 就绪。已授权过串口的话直接点「连接设备」（免弹框）');

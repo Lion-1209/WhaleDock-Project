@@ -59,7 +59,8 @@ main {
 .c-wifi   { grid-column: 2; grid-row: 1; }
 .c-config { grid-column: 1; grid-row: 2; }
 .c-gh     { grid-column: 2; grid-row: 2; }
-.c-store  { grid-column: 1 / span 2; grid-row: 3; }
+.c-ota    { grid-column: 1; grid-row: 3; }
+.c-store  { grid-column: 2; grid-row: 3; }
 .log-card { grid-column: 3; grid-row: 1 / span 3; position: sticky; top: 70px; }
 
 .log-card { display: flex; flex-direction: column; min-width: 0; }
@@ -67,6 +68,7 @@ main {
 .c-wifi h2 { border-color: var(--green); }
 .c-config h2 { border-color: #b48cff; }
 .c-gh h2 { border-color: var(--orange); }
+.c-ota h2 { border-color: var(--red); }
 .c-store h2 { border-color: #9aa5b1; }
 .c-log h2 { border-color: var(--teal); }
 
@@ -187,6 +189,22 @@ button.ghost { padding: 4px 10px; font-size: 12.5px; }
 }
 .fs-content:empty { display: none; }
 
+/* OTA 升级进度条 */
+.progress {
+  height: 8px;
+  margin-top: 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.progress > div {
+  height: 100%;
+  width: 0;
+  background: var(--red);
+  transition: width 0.3s;
+}
+
 /* ---- 日志台：粘性、占满视口高度 ---- */
 .log-card {
   position: sticky;
@@ -246,11 +264,10 @@ footer {
 /* ---- 窄屏：先退为两栏卡片 + 日志通栏，再退单列 ---- */
 @media (max-width: 1240px) {
   main { grid-template-columns: 1fr 1fr; }
-  .c-device, .c-wifi, .c-config, .c-gh, .c-store, .log-card {
+  .c-device, .c-wifi, .c-config, .c-gh, .c-ota, .c-store, .log-card {
     grid-column: auto;
     grid-row: auto;
   }
-  .c-store { grid-column: 1 / -1; }
   .log-card { grid-column: 1 / -1; position: static; }
   .log { height: 320px; }
 }

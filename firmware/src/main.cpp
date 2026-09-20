@@ -16,6 +16,7 @@
 #include "services/cli.h"
 #include "services/datapipe.h"
 #include "services/ntp.h"
+#include "services/ota.h"
 #include "services/storage.h"
 #include "services/wifi.h"
 
@@ -25,12 +26,14 @@ void setup() {
   // 原生 USB CDC（ARDUINO_USB_CDC_ON_BOOT=1），上电即可被 Web Serial 枚举
   Serial.begin(SERIAL_BAUD);
   delay(2000);  // 等 CDC 枚举完成，避免开头日志丢失
+  Serial.printf("[固件] WhaleDock v%s\n", FW_VERSION);
 
   selfcheck::print();
   onboardLed.begin();
   storage::begin();      // 配置与数据缓存的持久化（LittleFS，分区 lfs）
   wifi::begin();
   cli::begin();
+  ota::begin();          // OTA 分区状态检查 + 待验证固件自动确认
   datapipe::begin();     // 挂接整点回调：到点按设备配置自动拉取数据源
 
   if (!SCREEN_ATTACHED) {
@@ -44,6 +47,7 @@ void loop() {
   cli::poll();
   wifi::poll();
   ntp::poll();  // 对时 + 整点调度（回调挂载点留给 A4 数据流水）
+  ota::poll();  // 待验证固件健康运行超时自动确认
 
   // 呼吸灯兼任联网状态指示：绿 = 已连接，蓝 = 未连接/重连中
   const bool online = wifi::state() == wifi::State::Connected;

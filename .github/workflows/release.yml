@@ -1,0 +1,45 @@
+name: release
+
+# 打 tag（v*）→ 构建固件 → 创建 GitHub Release 并附上产物。
+# 设备端 OTA 用固定直链升级到最新版：
+#   https://github.com/Lion-1209/WhaleDock-Project/releases/latest/download/firmware.bin
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Cache PlatformIO
+        uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/platformio.ini') }}
+
+      - name: Install PlatformIO Core
+        run: pip install --quiet platformio
+
+      - name: Build firmware
+        working-directory: firmware
+        run: pio run
+
+      - name: Create release with firmware assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            firmware/.pio/build/whaledock/firmware.bin \
+            firmware/.pio/build/whaledock/bootloader.bin \
+            firmware/.pio/build/whaledock/partitions.bin \
+            --title "鲸屿固件 $GITHUB_REF_NAME" \
+            --notes "自动构建。设备端可经 OTA 直链升级：releases/latest/download/firmware.bin"

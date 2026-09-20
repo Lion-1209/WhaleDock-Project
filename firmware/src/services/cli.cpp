@@ -6,6 +6,7 @@
 #include "datapipe.h"
 #include "github.h"
 #include "ntp.h"
+#include "ota.h"
 #include "storage.h"
 #include "wifi.h"
 
@@ -31,6 +32,9 @@ void printHelp() {
   Serial.println("  config show|user <l>|repo <o/r>|token <t>  数据源配置（- 清除对应项）");
   Serial.println("  fs ls [dir]|cat <f>|rm <f>|format   文件系统调试");
   Serial.println("  pipe                     立即执行一轮数据流水（同整点动作）");
+  Serial.println("  ota status               固件版本/分区状态");
+  Serial.println("  ota <url>                下载 .bin 升级（写备用分区后重启）");
+  Serial.println("  ota confirm|rollback     确认新固件 / 回滚旧版本");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -234,6 +238,18 @@ void dispatch(char* line) {
     cmdFs(rest);
   } else if (!strcmp(line, "pipe")) {
     datapipe::runOnce("手动");
+  } else if (!strcmp(line, "ota")) {
+    if (!strcmp(rest, "status") || !*rest) {
+      ota::printStatus();
+    } else if (!strcmp(rest, "confirm")) {
+      ota::confirm("手动");
+    } else if (!strcmp(rest, "rollback")) {
+      ota::rollbackNow();
+    } else if (strncmp(rest, "http", 4) == 0) {
+      ota::fromUrl(rest);
+    } else {
+      Serial.println("[CLI] 格式：ota status | <url> | confirm | rollback");
+    }
   } else if (!strcmp(line, "time")) {
     Serial.printf("[时间] %s（UTC+8）\n", ntp::timeString());
   } else if (!strcmp(line, "reboot")) {

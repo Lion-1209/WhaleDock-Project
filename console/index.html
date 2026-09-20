@@ -108,6 +108,21 @@
         <div id="gh-bars" class="bars"></div>
       </section>
 
+      <section class="card c-ota">
+        <h2>固件升级（OTA）</h2>
+        <div id="ota-state" class="wifi-state">当前固件版本：连接后显示</div>
+        <label>固件 .bin 直链
+          <input id="ota-url" type="text" value="https://github.com/Lion-1209/WhaleDock-Project/releases/latest/download/firmware.bin" autocomplete="off">
+        </label>
+        <div class="row">
+          <button type="button" id="btn-ota" class="primary">开始升级</button>
+          <button type="button" id="btn-ota-confirm">确认新固件</button>
+          <button type="button" id="btn-ota-rollback" class="danger">回滚…</button>
+        </div>
+        <div class="progress"><div id="ota-progress"></div></div>
+        <p class="hint">写入备用分区 → 重启进入新固件 → 健康运行 90s 自动确认。下载/校验失败不影响当前固件。</p>
+      </section>
+
       <section class="card c-store">
         <h2>存储（LittleFS）</h2>
         <div class="row tight">
