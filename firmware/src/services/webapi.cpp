@@ -43,11 +43,10 @@ void sendErr(int code, const char* msg) {
   sendJson(code, out);
 }
 
-// CORS 预检（网页跨源直连必需）
+// CORS 预检：enableCORS(true) 会给所有响应自动加 CORS 头，
+// 这里绝不能再手动加——重复的 Access-Control-Allow-Origin 头会被浏览器
+// 判定非法（curl 不检查，浏览器直接拒绝），预检即失败
 void handleOptions() {
-  server.sendHeader("Access-Control-Allow-Origin", "*");
-  server.sendHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  server.sendHeader("Access-Control-Allow-Headers", "Content-Type");
   server.send(204, "text/plain", "");
 }
 

@@ -605,10 +605,10 @@ const netButtons = (on) =>
     .forEach((id) => { $(id).disabled = !on; });
 
 async function netFetch(path, opts = {}) {
-  const r = await fetch(netBase + path, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json' },
-  });
+  // GET 不带自定义头（避免触发 CORS 预检）；POST 仅在有 body 时声明 JSON
+  const init = { ...opts };
+  if (opts.body) init.headers = { 'Content-Type': 'application/json' };
+  const r = await fetch(netBase + path, init);
   return r.json();
 }
 
