@@ -73,6 +73,25 @@ function appendLog(text) {
 let scanMode = false;   // [WiFi] 共 N 个 AP： 之后进入，遇到下一行 [ 开头退出
 let commitMode = false;  // gh commits 的数字行
 const gh = { weeks: [], total: 0 };
+let netMdns = '';  // [Web] mDNS 已注册：http://whaledock-xxxx.local
+
+// 串口日志里发现设备 IP / mDNS 名 → 网络卡提示一键填入
+function renderNetHint() {
+  const el = $('net-hint');
+  if (!el || !wifi.ip || wifi.ip === '--') return;
+  el.hidden = false;
+  el.textContent = '串口检测到设备：';
+  const a = document.createElement('a');
+  a.href = '#';
+  a.textContent = wifi.ip;
+  a.addEventListener('click', (e) => {
+    e.preventDefault();
+    $('net-host').value = wifi.ip;
+    appendLog(`[页面] 已填入设备地址 ${wifi.ip}，点「连接」`);
+  });
+  el.appendChild(a);
+  if (netMdns) el.append(`（或 ${netMdns}，Chrome/Edge 可用）`);
+}
 
 // ---- 数据源配置 / 存储解析 ----
 const fstate = {
@@ -195,6 +214,10 @@ function parseOta(line) {
 }
 
 function parseLine(line) {
+  // mDNS 注册行 → 网络卡提示
+  let mm = line.match(/^\[Web\] mDNS 已注册：http:\/\/(\S+)/);
+  if (mm) { netMdns = mm[1]; renderNetHint(); return; }
+
   // ---- 配置 / 存储（先于其它解析，含多行采集态） ----
   if (parseCfg(line)) return;
   // ---- 固件版本 / OTA ----
@@ -268,12 +291,14 @@ function parseLine(line) {
     wifi.saved = m[1];
     wifi.ip = m[2];
     setState('connected');
+    renderNetHint();
   } else if (line.includes('SSID=') && line.includes('已连接')) {
     const s = line.match(/SSID=(\S*)/);
     const ip = line.match(/IP=(\S+)/);
     if (s) wifi.saved = s[1];
     if (ip) wifi.ip = ip[1];
     setState('connected');
+    renderNetHint();
   } else if ((m = line.match(/连接中：(.+)$/))) {
     wifi.saved = m[1];
     setState('connecting');
