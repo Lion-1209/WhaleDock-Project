@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>鲸屿 WhaleDock · 配网调机台</title>
-  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="css/style.css?v=20260920f">
 </head>
 <body>
   <header>
@@ -21,7 +21,7 @@
 
       <section class="card c-device">
         <h2>设备连接</h2>
-        <p class="hint">首次使用点「添加串口…」，按引导在浏览器授权框中选中 <b>"USB 串行设备 (COM…)"</b>——此步是浏览器安全要求，<b>一生只需一次</b>；之后的选择、切换、重连全部在本页完成。USB-C 插 DevKitC-1 标 "USB" 的口；连接前关闭占用 COM 口的程序（如 VS Code 串口监视）。</p>
+        <p class="hint">首次使用点「添加串口…」，按引导选中 <b>USB 串行设备 (COM…)</b> 即可——授权<b>一生只需一次</b>。USB-C 插 DevKitC-1 标 "USB" 的口；连接前关闭占用串口的程序。</p>
         <label id="port-area" hidden>已授权串口
           <select id="port-select"></select>
         </label>
@@ -29,6 +29,7 @@
           <button id="btn-connect" class="primary">连接设备</button>
           <button id="btn-add">添加串口…</button>
           <button id="btn-disconnect" disabled>断开</button>
+          <button type="button" id="btn-reboot" class="ghost">重启</button>
         </div>
         <div id="pick-modal" class="modal" hidden>
           <div class="modal-box">
@@ -59,7 +60,6 @@
             <button type="button" id="btn-status">状态查询</button>
             <button type="button" id="btn-scan">扫描周边</button>
             <button type="button" id="btn-clear" class="danger">清除凭据</button>
-            <button type="button" id="btn-reboot">重启设备</button>
           </div>
         </form>
         <div id="scan-list" class="scan-list"></div>
@@ -125,40 +125,44 @@
 
       <section class="card c-store">
         <h2>存储（LittleFS）</h2>
-        <div class="row tight">
-          <button type="button" id="btn-fs-refresh">刷新文件列表</button>
-          <button type="button" id="btn-fs-format" class="danger">格式化…</button>
-        </div>
         <p class="hint">目录可点击进入，文件可点击查看内容（config.json / cache/*.json）。</p>
         <div id="fs-list" class="scan-list"></div>
         <pre id="fs-content" class="fs-content"></pre>
+        <div class="row">
+          <button type="button" id="btn-fs-refresh" class="primary">刷新文件列表</button>
+          <button type="button" id="btn-fs-format" class="danger">格式化…</button>
+        </div>
       </section>
 
       <section class="card c-net">
-        <h2>局域网设备（HTTP）</h2>
+        <h2>局域网设备（HTTP）<span id="net-badge" class="badge off">未连接</span></h2>
         <p class="hint">串口之外的 Wi-Fi 直连通道（设备自动注册 <b>whaledock-xxxx.local</b>）。状态/流水/OTA/重启均可走网络；日志仍走串口。与串口通道互不干扰，<b>烧录/升级不再需要断开串口</b>。</p>
-        <label>设备地址
-          <input id="net-host" type="text" placeholder="whaledock-xxxx.local 或 192.168.x.x" autocomplete="off">
-        </label>
-        <div id="net-hint" class="hint" hidden></div>
-        <div class="row">
-          <button type="button" id="btn-net" class="primary">连接</button>
-          <button type="button" id="btn-net-off" disabled>断开</button>
-          <button type="button" id="btn-net-refresh" disabled>刷新</button>
+        <div class="net-left">
+          <label>设备地址
+            <input id="net-host" type="text" placeholder="whaledock-xxxx.local 或 192.168.x.x" autocomplete="off">
+          </label>
+          <div id="net-hint" class="hint" hidden></div>
+          <div class="row">
+            <button type="button" id="btn-net" class="primary">连接</button>
+            <button type="button" id="btn-net-off" disabled>断开</button>
+            <button type="button" id="btn-net-refresh" disabled>刷新</button>
+          </div>
+          <div class="row">
+            <button type="button" id="btn-net-pipe" disabled>立即拉取</button>
+            <button type="button" id="btn-net-ota" class="flat" disabled>升级到最新版</button>
+            <button type="button" id="btn-net-reboot" class="danger" disabled>重启…</button>
+          </div>
         </div>
-        <div id="net-state" class="wifi-state">未连接</div>
-        <div class="row">
-          <button type="button" id="btn-net-pipe" disabled>立即拉取</button>
-          <button type="button" id="btn-net-ota" disabled>升级到最新版</button>
-          <button type="button" id="btn-net-reboot" class="danger" disabled>重启…</button>
+        <div class="net-right">
+          <div id="net-state" class="wifi-state">未连接</div>
         </div>
       </section>
 
     <section class="card c-log log-card">
-        <h2>设备日志</h2>
+        <h2>设备日志<button type="button" id="btn-log-clear" class="ghost">清空</button></h2>
         <div id="log" class="log"></div>
         <div class="row cmd-row">
-          <input id="cmd" type="text" placeholder="输入命令发送到设备（如 help / gh user torvalds），回车发送" autocomplete="off">
+          <input id="cmd" type="text" placeholder="输入命令发送到设备，如 help / gh user torvalds，回车发送" autocomplete="off">
           <button id="btn-send">发送</button>
           <label class="inline"><input id="autoscroll" type="checkbox" checked> 自动滚动</label>
         </div>
@@ -167,6 +171,6 @@
 
   <footer>零后端 · Web Serial 直连 · 协议为固件串口 CLI（services/cli）</footer>
 
-  <script type="module" src="js/app.js?v=20260920b"></script>
+  <script type="module" src="js/app.js?v=20260920d"></script>
 </body>
 </html>

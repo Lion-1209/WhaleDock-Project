@@ -457,6 +457,7 @@ const sendCmd = async () => {
   try { await link.send(text); } catch (e) { appendLog(`[页面] 发送失败：${e.message}`); }
 };
 $('btn-send').addEventListener('click', sendCmd);
+$('btn-log-clear').addEventListener('click', () => { $('log').textContent = ''; });
 $('cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCmd(); });
 
 const cmd = (c) => async () => {
@@ -624,6 +625,12 @@ const OTA_LATEST =
 const netSet = (text, cls) => {
   $('net-state').textContent = text;
   $('net-state').className = 'wifi-state' + (cls ? ' ' + cls : '');
+  // 卡头徽标由状态类派生：ok=已连接 / warn=异常 / off=未连接 / 其余=进行中
+  const badge = $('net-badge');
+  const state = cls === 'ok' ? 'connected' : cls === 'warn' ? 'retrying' : cls === 'off' ? 'off' : 'connecting';
+  const label = cls === 'ok' ? '已连接' : cls === 'warn' ? '异常' : cls === 'off' ? '未连接' : '进行中';
+  badge.className = 'badge ' + state;
+  badge.textContent = label;
 };
 const netButtons = (on) =>
   ['btn-net-off', 'btn-net-refresh', 'btn-net-pipe', 'btn-net-ota', 'btn-net-reboot']
@@ -673,7 +680,7 @@ $('btn-net').addEventListener('click', async () => {
     netSet('连接失败：' + e.message + '（核对地址，且设备与本机同一局域网）', 'warn');
   }
 });
-$('btn-net-off').addEventListener('click', () => { netStop(); netSet('已断开'); });
+$('btn-net-off').addEventListener('click', () => { netStop(); netSet('已断开', 'off'); });
 $('btn-net-refresh').addEventListener('click', netPoll);
 $('btn-net-pipe').addEventListener('click', async () => {
   netSet('流水执行中（数秒，结果落缓存）…');
@@ -695,7 +702,6 @@ $('btn-net-reboot').addEventListener('click', async () => {
   netSet('设备重启中，约 15 秒后可重新连接');
 });
 
-appendLog('[页面] 就绪。已授权过串口的话直接点「连接设备」（免弹框）');
 refreshGranted();
 
 // 初始展示出厂默认数据源（设备连接后由实际配置覆盖）

@@ -5,7 +5,7 @@
   --card: #1a2129;
   --border: #2a3542;
   --text: #d8e1ea;
-  --dim: #6b7a89;
+  --dim: #8a99a8;
   --accent: #4da3ff;
   --green: #3ecf8e;
   --red: #ff6b6b;
@@ -40,7 +40,7 @@ header {
 
 h1 { font-size: 19px; margin: 0; }
 h1 small { color: var(--dim); font-weight: 400; margin-left: 8px; }
-h2 { font-size: 15px; margin: 0 0 10px; padding-left: 9px; border-left: 3px solid var(--dim); }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px; padding-left: 9px; border-left: 3px solid var(--border); }
 
 .header-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 
@@ -52,7 +52,6 @@ main {
   display: grid;
   grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr) minmax(420px, 1.25fr);
   gap: 16px;
-  align-items: stretch;
 }
 
 .c-device { grid-column: 1; grid-row: 1; }
@@ -61,24 +60,35 @@ main {
 .c-gh     { grid-column: 2; grid-row: 2; }
 .c-ota    { grid-column: 1; grid-row: 3; }
 .c-store  { grid-column: 2; grid-row: 3; }
-.c-net    { grid-column: 1; grid-row: 4; }
+.c-net    { grid-column: 1 / span 2; grid-row: 4; }
 .log-card { grid-column: 3; grid-row: 1 / span 4; position: sticky; top: 70px; }
 
 .log-card { display: flex; flex-direction: column; min-width: 0; }
-.c-device h2 { border-color: var(--accent); }
-.c-wifi h2 { border-color: var(--green); }
-.c-config h2 { border-color: #b48cff; }
-.c-gh h2 { border-color: var(--orange); }
-.c-ota h2 { border-color: var(--red); }
-.c-store h2 { border-color: #9aa5b1; }
-.c-net h2 { border-color: #e3b341; }
-.c-log h2 { border-color: var(--teal); }
+
+/* 等高卡片：操作行吸附卡底，同行多余高度成为卡内呼吸空间而非裸背景 */
+.c-device > .row { margin-top: auto; }
+#wifi-form, #cfg-form { display: flex; flex-direction: column; flex: 1; }
+#wifi-form .row, #cfg-form .row { margin-top: auto; }
+.c-store > .scan-list { flex: 1; }
+
+/* 局域网卡双栏：左操作、右诊断，通栏宽度下不左重右轻 */
+.c-net { display: grid; grid-template-columns: 1.1fr 0.9fr; column-gap: 18px; align-items: stretch; }
+.c-net > h2, .c-net > .hint { grid-column: 1 / -1; }
+.net-left { display: flex; flex-direction: column; }
+.net-left .row:last-child { margin-top: auto; }
+.net-right { display: flex; flex-direction: column; }
+.net-right > .wifi-state { flex: 1; }
+
+.c-log h2 { display: flex; justify-content: space-between; align-items: center; border-color: var(--teal); }
+.c-net h2 { display: flex; justify-content: space-between; align-items: center; }
 
 .card {
   background: var(--card);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .hint { color: var(--dim); font-size: 13px; margin: 6px 0; }
@@ -98,6 +108,7 @@ input[type="text"], input[type="password"], select {
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 14px;
+  text-overflow: ellipsis;
 }
 input:focus { outline: 1px solid var(--accent); }
 
@@ -114,7 +125,8 @@ button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
 button.primary { background: var(--accent); border-color: var(--accent); color: #08131f; font-weight: 600; }
 button.danger { border-color: var(--red); color: var(--red); }
-button.ghost { padding: 4px 10px; font-size: 12.5px; }
+button.ghost { padding: 7px 14px; font-size: 13.5px; background: transparent; color: var(--dim); }
+button.flat { background: transparent; border-color: var(--accent); color: var(--accent); }
 
 .badge {
   padding: 4px 14px;
@@ -222,8 +234,8 @@ button.ghost { padding: 4px 10px; font-size: 12.5px; }
   background: #0b0f13;
   border: 1px solid var(--border);
   border-radius: 6px;
-  height: calc(100vh - 235px);
-  min-height: 320px;
+  flex: 1;
+  min-height: 300px;
   overflow-y: auto;
   padding: 8px 10px;
   font: 12.5px/1.5 Consolas, "Cascadia Mono", monospace;
@@ -231,10 +243,21 @@ button.ghost { padding: 4px 10px; font-size: 12.5px; }
   word-break: break-all;
 }
 
+.log:empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.log:empty::before {
+  content: '暂无日志——连接设备后，串口输出将实时显示在这里';
+  color: var(--dim);
+}
+
 .log .dim { color: var(--dim); }
 .log .wifi { color: var(--green); }
 .log .page { color: var(--orange); }
 
+.cmd-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
 .cmd-row input { flex: 1; margin-top: 0; }
 
 /* ---- 弹窗 ---- */
@@ -272,10 +295,12 @@ footer {
     grid-row: auto;
   }
   .log-card { grid-column: 1 / -1; position: static; }
-  .log { height: 320px; }
+  .c-net { grid-column: 1 / -1; }
+  .log { flex: none; height: 320px; }
 }
 
 @media (max-width: 760px) {
   main { grid-template-columns: 1fr; }
+  .c-net { grid-template-columns: 1fr; }
   header { position: static; }
 }
