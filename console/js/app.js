@@ -590,6 +590,86 @@ $('btn-ota-rollback').addEventListener('click', () => {
   cmd('ota rollback')();
 });
 
+// ---- 局域网设备（HTTP API，与串口通道并行互不干扰） ----
+let netBase = null;
+let netTimer = null;
+const OTA_LATEST =
+  'https://github.com/Lion-1209/WhaleDock-Project/releases/latest/download/firmware.bin';
+
+const netSet = (text, cls) => {
+  $('net-state').textContent = text;
+  $('net-state').className = 'wifi-state' + (cls ? ' ' + cls : '');
+};
+const netButtons = (on) =>
+  ['btn-net-off', 'btn-net-refresh', 'btn-net-pipe', 'btn-net-ota', 'btn-net-reboot']
+    .forEach((id) => { $(id).disabled = !on; });
+
+async function netFetch(path, opts = {}) {
+  const r = await fetch(netBase + path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  return r.json();
+}
+
+async function netPoll() {
+  try {
+    const s = await netFetch('/api/status');
+    netSet(`v${s.version} · ${s.wifi.ssid} ${s.wifi.ip}（${s.wifi.state}，${s.wifi.rssi} dBm）\n${s.time} · 堆 ${s.heap} KB · @${s.partition}`,
+      s.wifi.state === '已连接' ? 'ok' : 'warn');
+  } catch (e) {
+    netSet('连接中断：' + e.message, 'warn');
+    netStop();
+  }
+}
+
+function netStop() {
+  if (netTimer) clearInterval(netTimer);
+  netTimer = null;
+  netBase = null;
+  netButtons(false);
+  $('btn-net').disabled = false;
+}
+
+$('btn-net').addEventListener('click', async () => {
+  const h = $('net-host').value.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
+  if (!h) { netSet('请输入设备地址（whaledock-xxxx.local 或 IP）', 'warn'); return; }
+  netBase = 'http://' + h;
+  netSet('连接中…');
+  try {
+    const s = await netFetch('/api/status');
+    netSet(`已连接：v${s.version} · ${s.wifi.ip}`, 'ok');
+    netButtons(true);
+    $('btn-net').disabled = true;
+    netPoll();
+    netTimer = setInterval(netPoll, 5000);
+  } catch (e) {
+    netBase = null;
+    netSet('连接失败：' + e.message + '（核对地址，且设备与本机同一局域网）', 'warn');
+  }
+});
+$('btn-net-off').addEventListener('click', () => { netStop(); netSet('已断开'); });
+$('btn-net-refresh').addEventListener('click', netPoll);
+$('btn-net-pipe').addEventListener('click', async () => {
+  netSet('流水执行中（数秒，结果落缓存）…');
+  await netFetch('/api/pipe', { method: 'POST' });
+  netPoll();
+});
+$('btn-net-ota').addEventListener('click', async () => {
+  if (!confirm('从 GitHub 最新 Release 升级固件？设备将下载并重启。')) return;
+  netSet('升级启动：下载写入后设备重启（约 1 分钟）…');
+  await netFetch('/api/ota', { method: 'POST', body: JSON.stringify({ url: OTA_LATEST }) });
+  netStop();
+  netSet('升级中…约 1 分钟后可重新连接');
+});
+$('btn-net-reboot').addEventListener('click', async () => {
+  if (!confirm('确认重启设备？')) return;
+  netSet('重启中…');
+  await netFetch('/api/reboot', { method: 'POST' });
+  netStop();
+  netSet('设备重启中，约 15 秒后可重新连接');
+});
+
 appendLog('[页面] 就绪。已授权过串口的话直接点「连接设备」（免弹框）');
 refreshGranted();
 

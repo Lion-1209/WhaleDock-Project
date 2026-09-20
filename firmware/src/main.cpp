@@ -18,6 +18,7 @@
 #include "services/ntp.h"
 #include "services/ota.h"
 #include "services/storage.h"
+#include "services/webapi.h"
 #include "services/wifi.h"
 
 static OnboardLed onboardLed;
@@ -35,6 +36,7 @@ void setup() {
   cli::begin();
   ota::begin();          // OTA 分区状态检查 + 待验证固件自动确认
   datapipe::begin();     // 挂接整点回调：到点按设备配置自动拉取数据源
+  webapi::begin();       // 设备 HTTP API（局域网通道，mDNS 联网后注册）
 
   if (!SCREEN_ATTACHED) {
     Serial.println("[屏] 未接屏（SCREEN_ATTACHED=false），跳过点屏，进入呼吸心跳");
@@ -48,6 +50,7 @@ void loop() {
   wifi::poll();
   ntp::poll();  // 对时 + 整点调度（回调挂载点留给 A4 数据流水）
   ota::poll();  // 待验证固件健康运行超时自动确认
+  webapi::poll();  // 处理局域网 HTTP 请求 + mDNS 注册
 
   // 呼吸灯兼任联网状态指示：绿 = 已连接，蓝 = 未连接/重连中
   const bool online = wifi::state() == wifi::State::Connected;
