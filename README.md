@@ -25,6 +25,8 @@ pio run            # 首次约下载 1GB 工具链（国内需配代理，见文
 pio run -t upload  # 烧录（USB-C 接 DevKitC-1 的 "USB" 口）
 ```
 
+已联网的设备支持 **OTA 免线升级**（网页一键 / 串口命令，详见 [docs/OTA升级指南.md](docs/OTA升级指南.md)）；Web 配网调机台见 [console/](console/)。
+
 ## 当前状态
 
 - [x] M1 自检程序：Flash/PSRAM 自检 + 双色测试图点屏（棋盘格验证黑白平面、红角标验证红平面）
