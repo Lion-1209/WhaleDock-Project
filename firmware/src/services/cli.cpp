@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "app/layout.h"
 #include "datapipe.h"
 #include "github.h"
 #include "ntp.h"
@@ -31,6 +32,7 @@ void printHelp() {
   Serial.println("  gh commits <owner>/<repo>  近 12 周提交序列");
   Serial.println("  config show|user <l>|repo <o/r>|token <t>  数据源配置（- 清除对应项）");
   Serial.println("  fs ls [dir]|cat <f>|rm <f>|format   文件系统调试");
+  Serial.println("  layout sample|check     写入/校验示例显示布局（协议 v1，见 docs/显示协议-v1.md）");
   Serial.println("  pipe                     立即执行一轮数据流水（同整点动作）");
   Serial.println("  ota status               固件版本/分区状态");
   Serial.println("  ota <url>                下载 .bin 升级（写备用分区后重启）");
@@ -218,6 +220,29 @@ void cmdConfig(char* rest) {
   }
 }
 
+// layout sample | layout check —— 显示协议 v1 布局校验（app/layout）
+void cmdLayout(char* rest) {
+  if (!strcmp(rest, "sample")) {
+    if (storage::writeFile("/layout.json", layout::sampleJson()))
+      Serial.println("[布局] 示例已写入 /layout.json（协议 v1 §11）");
+    else
+      Serial.println("[布局] 写入失败");
+  } else if (!strcmp(rest, "check")) {
+    if (!storage::exists("/layout.json")) {
+      Serial.println("[布局] /layout.json 不存在，先 layout sample");
+      return;
+    }
+    const layout::CheckResult r = layout::check(storage::readFile("/layout.json"));
+    Serial.printf("[布局] 校验%s：%zu widgets · %zu 数据源 · %s 模式\n",
+                  r.ok ? "通过" : "未通过", r.widgetCount, r.sourceCount,
+                  r.bitmapMode ? "位图" : "Widget");
+    if (r.summary.length()) Serial.print(r.summary.c_str());
+    if (!r.ok) Serial.print(r.errors.c_str());
+  } else {
+    Serial.println("[CLI] 格式：layout sample | check");
+  }
+}
+
 void dispatch(char* line) {
   if (!*line) return;
   char* sp = strchr(line, ' ');
@@ -236,6 +261,8 @@ void dispatch(char* line) {
     cmdConfig(rest);
   } else if (!strcmp(line, "fs")) {
     cmdFs(rest);
+  } else if (!strcmp(line, "layout")) {
+    cmdLayout(rest);
   } else if (!strcmp(line, "pipe")) {
     datapipe::runOnce("手动");
   } else if (!strcmp(line, "ota")) {
