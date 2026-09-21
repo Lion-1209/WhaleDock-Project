@@ -8,7 +8,7 @@
 //   GPIO19/20 USB D−/D+；GPIO0/3/45/46 strapping，慎用
 // ============================================================
 
-// ---- 7.5" 三色墨水屏（微雪 8pin 模组，走 SPI2/FSPI）----
+// ---- 7.5" 四色墨水屏（黑白红黄，8pin 模组，走 SPI2/FSPI）----
 constexpr int EPD_CS   = 10;   // 片选
 constexpr int EPD_DC   = 9;    // 数据/命令
 constexpr int EPD_RST  = 14;   // 复位
