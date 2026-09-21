@@ -8,7 +8,8 @@
 
 // 固件版本（OTA 升级前后在日志/网页可见；发版必须递增）
 // 0.5.0：显示协议 v1 冻结 + 布局校验（layout sample|check）+ 四色驱动类切换
-constexpr const char* FW_VERSION = "0.5.0";
+// 0.5.1：协议 v1.1 追加（slotRect / heatMap / stats 聚合），示例改概念图复刻版
+constexpr const char* FW_VERSION = "0.5.1";
 
 // 屏未到货 = false：跳过点屏，只跑板级自检 + 呼吸心跳；屏到货改 true
 constexpr bool SCREEN_ATTACHED = false;

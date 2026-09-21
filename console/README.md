@@ -10,10 +10,15 @@
 - **存储**：LittleFS 文件浏览、内容查看、格式化
 - **局域网**：mDNS 名或 IP 直连，状态轮询/流水/OTA/重启全网络操作（日志仍走串口）
 - **日志**：实时串口日志（自动滚动）、自由命令输入
+- **显示协议 v1 模拟器**：[`simulator.html`](./simulator.html) —— 粘贴布局 JSON，800×480 四色预览 + 与固件同源的协议校验（`docs/显示协议-v1.md`）；默认示例 = 概念图 v2 屏幕版式 1:1 复刻（鲸鱼为 datawhalelogo.png 转 1bpp 位图，协议 `image` 通道内联）
+
+## 像素资源提取（tools/pixelize.html）
+
+把概念图/位图素材转成协议 `image` 资源的零依赖静态工具：`python -m http.server` 起根目录服务后浏览器打开 `tools/pixelize.html?src=<图片路径>&grid=1`（grid = 叠加 100px 坐标网格）。支持框选裁剪、阈值二值化、红/黄通道分离、点采样降维，输出字符矩阵与 JS 数组；1bpp 位图打包（MSB-first）可直接作为 `resources[].data` 内联进布局 JSON。当前鲸鱼资源即由它从 `鲸鱼概念图素材` 生成。
 
 ## 线上版与本地版
 
-- **线上版**：<https://lion-1209.github.io/WhaleDock-Project/console/>（GitHub Pages，随 main 自动部署）
+- **线上版**：<https://lion-1209.github.io/WhaleDock-Project/console/>（GitHub Pages，随 main 自动部署；含 [模拟器](https://lion-1209.github.io/WhaleDock-Project/console/simulator.html)）
 - **本地版**：Web Serial 要求安全上下文（HTTPS 或 localhost），**直接双击 index.html 打开无效**：
 
 ```bash

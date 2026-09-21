@@ -5,16 +5,17 @@
 namespace layout {
 
 const char* sampleJson() {
-  // 与 docs/显示协议-v1.md §11 示例一致（glyphs 置空：结构校验不展开字库）
+  // 概念图 v2（鲸屿形态）屏幕版式复刻（与模拟器 SAMPLE 一致；glyphs 置空：结构校验不展开字库）
   return R"({"version":1,"dataSources":[
     {"id":"gh","type":"github.user","params":{"user":"datawhalechina"}},
     {"id":"repo","type":"github.repo","params":{"owner":"datawhalechina","repo":"leeml-notes"}}],
   "layout":{"resolution":[800,480],"widgets":[
-    {"slot":"tl","type":"pet","res":"whale_pixel"},
-    {"slot":"tr","type":"clock","calendar":true},
-    {"slot":"bl","type":"barChart","source":"repo","weeks":12,"title":"近12周提交","goal":30,"goalColor":"yellow"},
-    {"slot":"br","type":"stats","source":"gh","fields":["public_repos","followers"],"labels":["开源仓库","关注者"],"color":"red"},
-    {"slot":"ticker","type":"ticker","text":"Keep coding. Keep shipping.","color":"black"}]}})";
+    {"slot":"tl","slotRect":{"x":12,"y":16,"w":300,"h":148},"type":"pet","res":"whale_pixel"},
+    {"slot":"tr","slotRect":{"x":330,"y":16,"w":458,"h":148},"type":"clock","calendar":true,"align":"right"},
+    {"slot":"bl","slotRect":{"x":12,"y":180,"w":776,"h":170},"type":"heatMap","source":"repo","title":"GitHub Contribution"},
+    {"slot":"br","slotRect":{"x":236,"y":364,"w":552,"h":72},"type":"stats","variant":"chips",
+     "fields":["public_repos","stars","forks","followers"],"labels":["Repositories","Stars","Forks","Followers"]},
+    {"slot":"ticker","slotRect":{"x":424,"y":444,"w":364,"h":24},"type":"text","size":"s","align":"right","text":"Keep coding. Keep shipping."}]}})";
 }
 
 namespace {
@@ -78,7 +79,8 @@ CheckResult check(const String& json) {
   std::vector<String> usedSlots;
   static const char* kQuadrants[] = {"tl", "tr", "bl", "br", "ticker"};
   static const char* kTypes[] = {"clock",   "stats", "barChart", "pet",
-                                 "text",    "image", "qr",       "ticker"};
+                                 "text",    "image", "qr",       "ticker",
+                                 "heatMap"};
 
   JsonArray widgets = layoutO["widgets"];
   if (!widgets || widgets.size() == 0) {
@@ -102,6 +104,14 @@ CheckResult check(const String& json) {
       // ticker 槽类型限制（规则 4）
       if (!strcmp(slot, "ticker") && strcmp(type, "ticker") && strcmp(type, "text"))
         r.errors += String("规则4: ticker 槽不允许类型 '") + type + "'\n";
+      // 规则 12（v1.1）：slotRect 覆写边界
+      if (w["slotRect"].is<JsonObject>()) {
+        JsonObject sr = w["slotRect"];
+        const int sx = sr["x"] | -1, sy = sr["y"] | -1;
+        const int sw = sr["w"] | -1, sh = sr["h"] | -1;
+        if (sx < 0 || sy < 0 || sw <= 0 || sh <= 0 || sx + sw > 800 || sy + sh > 480)
+          r.errors += String("规则12: slotRect 越界或非法（'") + slot + "'）\n";
+      }
       // 颜色（规则 7）
       if (w["color"].is<const char*>()) {
         const char* c = w["color"];
@@ -111,9 +121,9 @@ CheckResult check(const String& json) {
       }
       if (w["goalColor"].is<const char*>() && !validColor(w["goalColor"]))
         r.errors += "规则7: 非法 goalColor\n";
-      // 数据源引用（规则 6）
+      // 数据源引用（规则 6；stats 可省略 source = 聚合全部数据源，v1.1）
       const char* src = w["source"] | "";
-      if (!strcmp(type, "stats") || !strcmp(type, "barChart")) {
+      if (!strcmp(type, "barChart") || !strcmp(type, "heatMap")) {
         if (!*src) r.errors += String("规则6: ") + type + " 缺 source\n";
         else {
           bool found = false;

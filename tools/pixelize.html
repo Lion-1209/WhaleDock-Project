@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>像素提取 · 概念图 → 像素矩阵</title>
+  <style>
+    :root {
+      --bg: #0f1419; --card: #1a2129; --border: #2a3542;
+      --text: #d8e1ea; --dim: #8a99a8; --accent: #4da3ff;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text);
+           font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; }
+    header { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+    h1 { font-size: 17px; margin: 0; }
+    h1 small { color: var(--dim); font-weight: 400; margin-left: 10px; font-size: 12.5px; }
+    .wrap { display: flex; gap: 16px; padding: 16px 20px 32px; align-items: flex-start;
+            flex-wrap: wrap; }
+    .panel { background: var(--card); border: 1px solid var(--border);
+             border-radius: 10px; padding: 14px 16px; }
+    .left { flex: 0 0 460px; display: flex; flex-direction: column; gap: 12px; }
+    .right { flex: 1 1 420px; min-width: 360px; }
+    button { padding: 7px 14px; background: #243040; color: var(--text);
+             border: 1px solid var(--border); border-radius: 6px;
+             font-size: 13.5px; cursor: pointer; }
+    button:hover:not(:disabled) { border-color: var(--accent); }
+    button.primary { background: var(--accent); border-color: var(--accent);
+                     color: #08131f; font-weight: 600; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+    label { color: var(--dim); font-size: 13px; }
+    input[type="number"] { width: 76px; padding: 5px 8px; background: #0b0f13;
+      color: var(--text); border: 1px solid var(--border); border-radius: 5px;
+      font: 13px Consolas, monospace; }
+    .hint { color: var(--dim); font-size: 12.5px; margin: 8px 0 0; }
+    textarea { width: 100%; background: #0b0f13; color: var(--text);
+      border: 1px solid var(--border); border-radius: 6px;
+      font: 12.5px/1.5 Consolas, monospace; padding: 8px; resize: vertical; }
+    #stage { position: relative; display: inline-block; line-height: 0;
+             border: 1px solid var(--border); }
+    #src { max-width: 100%; image-rendering: pixelated; cursor: crosshair; }
+    #overlay { position: absolute; inset: 0; }
+    .sel { position: absolute; border: 1px dashed var(--accent);
+           background: rgba(77,163,255,0.12); pointer-events: none; }
+    #preview { image-rendering: pixelated; max-width: 100%; background: #f5f4ef;
+               border-radius: 4px; display: block; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>像素提取 · 概念图 → 像素矩阵 <small>零依赖静态页 · 阈值二值化 + 红/黄通道分离 · 四色像素画资源生成</small>
+  </header>
+
+  <div class="wrap">
+    <div class="left">
+      <section class="panel">
+        <h2 style="margin:0 0 8px;font-size:15px">1 · 源图</h2>
+        <input type="file" id="file" accept="image/*">
+        <p class="hint" id="srcinfo">未加载</p>
+      </section>
+
+      <section class="panel">
+        <h2 style="margin:0 0 8px;font-size:15px">2 · 裁剪与采样（在左图画框）</h2>
+        <div class="row" style="margin-top:0">
+          <label>x<input type="number" id="cx" value="0"></label>
+          <label>y<input type="number" id="cy" value="0"></label>
+          <label>宽<input type="number" id="cw" value="0"></label>
+          <label>高<input type="number" id="ch" value="0"></label>
+          <label>列<input type="number" id="cols" value="28"></label>
+          <label>阈值<input type="number" id="th" value="128" min="0" max="255"></label>
+        </div>
+        <div class="row">
+          <button id="btn-run" class="primary">提取矩阵</button>
+          <button id="btn-inv">反相</button>
+        </div>
+        <p class="hint">字符约定：K=黑 R=红 Y=黄 W=白。点采样（非插值），适合像素画。
+          红/黄按 HSV 色相判定（饱和度需 &gt; 25），仅当该像素颜色命中且亮度低于阈值时落 R/Y，否则按灰度阈值落 K/W。</p>
+      </section>
+
+      <section class="panel">
+        <h2 style="margin:0 0 8px;font-size:15px">3 · 输出</h2>
+        <textarea id="out" rows="16" spellcheck="false" placeholder="点击「提取矩阵」后，这里输出可直接粘贴的 JS 数组"></textarea>
+        <div class="row">
+          <button id="btn-copy">复制</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="right">
+      <section class="panel">
+        <h2 style="margin:0 0 8px;font-size:15px">预览（左：源图框选 / 右：放大预览）</h2>
+        <div id="stage">
+          <img id="src" alt="源图">
+          <canvas id="overlay"></canvas>
+        </div>
+        <div class="row">
+          <canvas id="preview" width="28" height="15"></canvas>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const params = new URLSearchParams(location.search);
+    const img = $('src'), overlay = $('overlay'), octx = overlay.getContext('2d');
+    let scale = 1; // 显示尺寸 / 原始尺寸
+
+    function loadSrc(src, name) {
+      img.onload = () => {
+        const dispW = Math.min(img.naturalWidth, 900);
+        scale = dispW / img.naturalWidth;
+        img.style.width = dispW + 'px';
+        overlay.width = dispW; overlay.height = Math.round(img.naturalHeight * scale);
+        $('srcinfo').textContent = `${name} · ${img.naturalWidth}×${img.naturalHeight}px（显示缩放 ${scale.toFixed(2)}×）`;
+        setCrop(0, 0, img.naturalWidth, img.naturalHeight);
+      };
+      img.src = src;
+    }
+
+    // 默认源：?src= 指定（HTTP 服务下的相对路径）；否则手动选文件
+    if (params.get('src')) loadSrc(params.get('src'), decodeURIComponent(params.get('src')));
+    $('file').addEventListener('change', (e) => {
+      const f = e.target.files[0];
+      if (f) loadSrc(URL.createObjectURL(f), f.name);
+    });
+
+    function setCrop(x, y, w, h) {
+      $('cx').value = Math.round(x); $('cy').value = Math.round(y);
+      $('cw').value = Math.round(w); $('ch').value = Math.round(h);
+      drawSel();
+    }
+    function drawSel() {
+      const x = +$('cx').value * scale, y = +$('cy').value * scale;
+      const w = +$('cw').value * scale, h = +$('ch').value * scale;
+      octx.clearRect(0, 0, overlay.width, overlay.height);
+      if (gridOn) {
+        // 50px 细网格 + 100px 粗网格与坐标标签（原图像素）
+        octx.strokeStyle = 'rgba(255,80,80,0.35)'; octx.lineWidth = 1;
+        octx.fillStyle = 'rgba(255,80,80,0.85)'; octx.font = '10px monospace';
+        octx.textAlign = 'left'; octx.textBaseline = 'top';
+        const W = img.naturalWidth, H = img.naturalHeight;
+        for (let gx = 100; gx < W; gx += 100) {
+          octx.beginPath(); octx.moveTo(gx * scale + 0.5, 0); octx.lineTo(gx * scale + 0.5, H * scale); octx.stroke();
+          octx.fillText(String(gx), gx * scale + 2, 2);
+        }
+        for (let gy = 100; gy < H; gy += 100) {
+          octx.beginPath(); octx.moveTo(0, gy * scale + 0.5); octx.lineTo(W * scale, gy * scale + 0.5); octx.stroke();
+          octx.fillText(String(gy), 2, gy * scale + 2);
+        }
+      }
+      octx.strokeStyle = '#4da3ff'; octx.lineWidth = 1; octx.setLineDash([5, 4]);
+      octx.strokeRect(x, y, w, h);
+      octx.setLineDash([]);
+      octx.fillStyle = '#4da3ff'; octx.font = '12px sans-serif';
+      octx.fillText(`${$('cw').value}×${$('ch').value} → ${$('cols').value}列`, x + 4, Math.max(12, y - 5));
+    }
+    let gridOn = params.has('grid');
+    ['cx', 'cy', 'cw', 'ch', 'cols'].forEach((id) => $(id).addEventListener('input', drawSel));
+
+    // 拖拽框选（源图像素坐标）
+    let drag = null;
+    overlay.addEventListener('pointerdown', (e) => {
+      const r = overlay.getBoundingClientRect();
+      const ox = (e.clientX - r.left) / scale, oy = (e.clientY - r.top) / scale;
+      drag = { ox, oy };
+      overlay.setPointerCapture(e.pointerId);
+    });
+    overlay.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const r = overlay.getBoundingClientRect();
+      const mx = (e.clientX - r.left) / scale, my = (e.clientY - r.top) / scale;
+      const x = Math.min(drag.ox, mx), y = Math.min(drag.oy, my);
+      setCrop(Math.round(x), Math.round(y), Math.round(Math.abs(mx - drag.ox)), Math.round(Math.abs(my - drag.oy)));
+    });
+    overlay.addEventListener('pointerup', () => { drag = null; });
+
+    let invert = false;
+    $('btn-inv').addEventListener('click', () => { invert = !invert; run(); });
+
+    function rgb2hsv(r, g, b) {
+      r /= 255; g /= 255; b /= 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+      let h = 0;
+      if (d) {
+        if (mx === r) h = ((g - b) / d + (g < b ? 6 : 0)) * 60;
+        else if (mx === g) h = ((b - r) / d + 2) * 60;
+        else h = ((r - g) / d + 4) * 60;
+      }
+      return [h, mx ? d / mx : 0, mx];
+    }
+
+    function extract() {
+      const x = +$('cx').value, y = +$('cy').value, w = +$('cw').value, h = +$('ch').value;
+      const cols = +$('cols').value, th = +$('th').value;
+      if (!img.naturalWidth || w <= 0 || h <= 0 || cols <= 0) return null;
+      const rows = Math.max(1, Math.round(h / (w / cols)));
+      const cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      const c = cv.getContext('2d', { willReadFrequently: true });
+      c.drawImage(img, x, y, w, h, 0, 0, w, h);
+      const d = c.getImageData(0, 0, w, h).data;
+      const gray = (px, py) => {
+        const sx = Math.min(w - 1, Math.floor((px + 0.5) / cols * w));
+        const sy = Math.min(h - 1, Math.floor((py + 0.5) / rows * h));
+        const i = (sy * w + sx) * 4;
+        const [hh, ss, vv] = rgb2hsv(d[i], d[i + 1], d[i + 2]);
+        return { i, h: hh, s: ss, v: vv };
+      };
+      const M = [];
+      for (let py = 0; py < rows; py++) {
+        const line = [];
+        for (let px = 0; px < cols; px++) {
+          const p = gray(px, py);
+          const lum = 0.299 * d[p.i] + 0.587 * d[p.i + 1] + 0.114 * d[p.i + 2];
+          const dark = invert ? lum > th : lum < th;
+          // 彩色命中：红/黄（排除纸底 ~245 与屏幕底 ~213，暗墨迹优先）
+          const red = p.s > 0.25 && (p.h < 20 || p.h > 340) && lum < 205;
+          const yellow = p.s > 0.25 && p.h >= 35 && p.h <= 75 && lum < 205;
+          line.push(red ? 'R' : yellow ? 'Y' : dark ? 'K' : '.');
+        }
+        M.push(line.join(''));
+      }
+      return { M, cols, rows };
+    }
+
+    function run() {
+      const r = extract();
+      if (!r) return;
+      $('out').value =
+        `// ${r.cols}×${r.rows} · 源 [${$('cx').value},${$('cy').value},${$('cw').value},${$('ch').value}] · 阈值${$('th').value}${invert ? ' · 反相' : ''}\n` +
+        r.M.map((l) => `  '${l}',`).join('\n');
+      const pv = $('preview');
+      pv.width = r.cols; pv.height = r.rows;
+      const pc = pv.getContext('2d');
+      const COL = { K: '#1c1c1c', R: '#b3382c', Y: '#d4a017' };
+      r.M.forEach((line, y) => [...line].forEach((ch, x) => {
+        pc.fillStyle = COL[ch] || '#f5f4ef';
+        pc.fillRect(x, y, 1, 1);
+      }));
+      pv.style.width = Math.min(420, r.cols * 12) + 'px';
+    }
+    $('btn-run').addEventListener('click', run);
+    $('btn-copy').addEventListener('click', async () => {
+      await navigator.clipboard.writeText($('out').value);
+      $('btn-copy').textContent = '已复制';
+      setTimeout(() => ($('btn-copy').textContent = '复制'), 900);
+    });
+  </script>
+</body>
+</html>
