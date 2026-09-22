@@ -10,6 +10,7 @@
 #include <Arduino.h>
 
 #include "config.h"
+#include "app/assets/concept_demo.h"
 #include "app/epaper_selftest.h"
 #include "app/onboard_led.h"
 #include "app/selfcheck.h"
@@ -42,7 +43,9 @@ void setup() {
     Serial.println("[屏] 未接屏（SCREEN_ATTACHED=false），跳过点屏，进入呼吸心跳");
     return;
   }
-  epaper_selftest::run();
+  // 开机画面 = 概念图 v2 示例帧（模拟器提取三平面固化资产；C2 引擎落地后换实时渲染）。
+  // 四色诊断图（B2 验证用）改走 CLI：screen test
+  concept_demo::show();
 }
 
 void loop() {

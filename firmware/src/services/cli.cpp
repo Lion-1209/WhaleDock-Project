@@ -3,7 +3,10 @@
 #include <Arduino.h>
 #include <WiFi.h>
 
+#include "app/assets/concept_demo.h"
+#include "app/epaper_selftest.h"
 #include "app/layout.h"
+#include "config.h"
 #include "datapipe.h"
 #include "github.h"
 #include "ntp.h"
@@ -33,6 +36,8 @@ void printHelp() {
   Serial.println("  config show|user <l>|repo <o/r>|token <t>  数据源配置（- 清除对应项）");
   Serial.println("  fs ls [dir]|cat <f>|rm <f>|format   文件系统调试");
   Serial.println("  layout sample|check     写入/校验示例显示布局（协议 v1，见 docs/显示协议-v1.md）");
+  Serial.println("  demo                     概念图 v2 示例帧上屏（模拟器提取三平面，全刷约 22s）");
+  Serial.println("  screen test              四色诊断图上屏（B2 管线验证图，全刷约 22s）");
   Serial.println("  pipe                     立即执行一轮数据流水（同整点动作）");
   Serial.println("  ota status               固件版本/分区状态");
   Serial.println("  ota <url>                下载 .bin 升级（写备用分区后重启）");
@@ -263,6 +268,20 @@ void dispatch(char* line) {
     cmdFs(rest);
   } else if (!strcmp(line, "layout")) {
     cmdLayout(rest);
+  } else if (!strcmp(line, "demo")) {
+    if (SCREEN_ATTACHED) {
+      concept_demo::show();
+    } else {
+      Serial.println("[CLI] SCREEN_ATTACHED=false，屏未启用");
+    }
+  } else if (!strcmp(line, "screen")) {
+    if (!SCREEN_ATTACHED) {
+      Serial.println("[CLI] SCREEN_ATTACHED=false，屏未启用");
+    } else if (!strcmp(rest, "test")) {
+      epaper_selftest::run();
+    } else {
+      Serial.println("[CLI] 格式：screen test");
+    }
   } else if (!strcmp(line, "pipe")) {
     datapipe::runOnce("手动");
   } else if (!strcmp(line, "ota")) {

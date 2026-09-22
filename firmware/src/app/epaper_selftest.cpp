@@ -2,19 +2,21 @@
 
 #include <Arduino.h>
 
+#include "app/canvas.h"
 #include "config.h"
 #include "drivers/epaper.h"
 
 namespace epaper_selftest {
 
-// B1 实机验收测试图（尺寸自适应驱动口径，800×480 / 880×528 均可渲染）。
+// B2 管线验证图（与 B1 测试图同版式，画布换 canvas 三平面管线）。
 // 验收点与判读：
-//   ① 四角 L 形角标 + 全幅黑框 —— 整幅寻址；右/下白边 = 物理分辨率大于驱动口径
+//   ① 四角 L 形角标 + 全幅黑框 —— 整幅寻址（800×480 定稿）
 //   ② 顶部四色条（黑/白/红/黄）—— 四色各平面都能驱动
 //   ③ 中部棋盘格 —— 黑白平面逐行逐列寻址，可见断线/错位
-//   ④ 红/黄验证带带字 —— 彩色平面与文字混排
+//   ④ 红/黄验证带带字 —— 彩色平面与文字混排（GFX 文本走 drawPixel→三平面）
+//   ⑤ 串口打印打包/刷新分段耗时 —— PSRAM 读取 + 2bpp 打包性能留档
 static void drawTestPattern() {
-  auto& d = epaper::display();
+  auto& d = canvas::get();  // Adafruit_GFX 语义
   const int w = d.width();
   const int h = d.height();
 
@@ -63,21 +65,19 @@ static void drawTestPattern() {
   d.setCursor(w - 304, bandY + 15);
   d.print("YELLOW");
 
-  // 底部信息行：驱动口径分辨率 + 固件版本（分辨率与实物不符时右/下会留白边）
+  // 底部信息行：画布分辨率 + 固件版本 + 管线标识
   d.setCursor(16, h - 34);
-  d.printf("%dx%d driver | FW v%s | B1 checkup", w, h, FW_VERSION);
-
-  Serial.printf("[屏] B1 四色测试图渲染完成（驱动口径 %dx%d），开始全刷（约 21s，勿断电）...\n", w, h);
-  const uint32_t t0 = millis();
-  d.display();  // 全刷：2bpp 单命令 0x10 推全帧并触发整帧刷新，内部等待 BUSY
-  Serial.printf("[屏] 全刷完成，耗时 %.1fs\n", (millis() - t0) / 1000.0);
-  Serial.println("[屏] 判读：四角角标齐全=寻址完整；右/下白边=物理分辨率大于驱动（切 DFG0750RYS 驱动复测）");
+  d.printf("%dx%d canvas | FW v%s | B2 pipeline", w, h, FW_VERSION);
 }
 
 void run() {
   epaper::init();
+  if (!canvas::get().begin()) {
+    Serial.println("[屏] 三平面 PSRAM 分配失败，跳过 B2 验证图");
+    return;
+  }
   drawTestPattern();
-  epaper::hibernate();
+  canvas::flush();
 }
 
 }  // namespace epaper_selftest

@@ -10,7 +10,10 @@
 // 0.5.0：显示协议 v1 冻结 + 布局校验（layout sample|check）+ 四色驱动类切换
 // 0.5.1：协议 v1.1 追加（slotRect / heatMap / stats 聚合），示例改概念图复刻版
 // 0.6.0：B1 实机点屏——SCREEN_ATTACHED 开闸 + 四色测试图（黑/白/红/黄）
-constexpr const char* FW_VERSION = "0.6.0";
+// 0.7.0：B2 canvas 三平面——PSRAM 帧缓冲 + 2bpp 打包分页整帧推送管线
+// 0.7.1：概念图 v2 示例帧固化上屏（模拟器三平面提取）+ init 硬复位唤醒 DSLP
+//        + BUSY 保险丝（反馈异常时按最坏时长保守等待，防打断刷新波形）
+constexpr const char* FW_VERSION = "0.7.1";
 
 // 屏到货（2026-09-22，DFG0750RYS677F71HP-D1，经 EVK011 转接板）= true：开机跑 B1 点屏自检
 constexpr bool SCREEN_ATTACHED = true;
