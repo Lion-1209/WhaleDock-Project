@@ -9,10 +9,11 @@
 // 固件版本（OTA 升级前后在日志/网页可见；发版必须递增）
 // 0.5.0：显示协议 v1 冻结 + 布局校验（layout sample|check）+ 四色驱动类切换
 // 0.5.1：协议 v1.1 追加（slotRect / heatMap / stats 聚合），示例改概念图复刻版
-constexpr const char* FW_VERSION = "0.5.1";
+// 0.6.0：B1 实机点屏——SCREEN_ATTACHED 开闸 + 四色测试图（黑/白/红/黄）
+constexpr const char* FW_VERSION = "0.6.0";
 
-// 屏未到货 = false：跳过点屏，只跑板级自检 + 呼吸心跳；屏到货改 true
-constexpr bool SCREEN_ATTACHED = false;
+// 屏到货（2026-09-22，DFG0750RYS677F71HP-D1，经 EVK011 转接板）= true：开机跑 B1 点屏自检
+constexpr bool SCREEN_ATTACHED = true;
 
 constexpr uint32_t SERIAL_BAUD = 115200;         // 原生 USB CDC
 constexpr uint32_t HEARTBEAT_PERIOD_MS = 10000;  // 串口心跳周期
