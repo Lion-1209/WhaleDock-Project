@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <esp_heap_caps.h>
+#include <esp_wifi.h>
 
 #include "drivers/epaper.h"
 
@@ -67,6 +68,15 @@ bool flush() {
   const uint8_t* yl = c.plane(PL_YELLOW);
   auto& epd2 = epaper::driver();
 
+  // 射频静默（实测定案）：WiFi 已关联时 modem-sleep 周期唤醒的发射尖峰经
+  // 杜邦供电线把面板侧 VCI 拉垮，PON/DRF 中途夭折（BUSY 提前释放、画面不变；
+  // boot 期射频静默故总能刷成）。刷新期间设备本就阻塞无响应，停射频换波形
+  // 完整；结束后重启射频，wifi 状态机自愈重连
+  wifi_mode_t wifiMode = WIFI_MODE_NULL;
+  esp_wifi_get_mode(&wifiMode);
+  const bool wifiWasOn = wifiMode != WIFI_MODE_NULL;
+  if (wifiWasOn) esp_wifi_stop();
+
   const uint32_t t0 = millis();
   epd2.setPaged();  // 内部完成 _InitDisplay 并发出 0x10 数据起始命令
   for (int16_t y = 0; y < H; y += PAGE_ROWS) {
@@ -106,7 +116,11 @@ bool flush() {
     Serial.printf("[屏] ⚠ BUSY 反馈异常（%ums 即返回，正常约 21800ms）——按最坏时长保守等待，勿断电\n", (unsigned)tRef);
     delay(kMinRefreshMs - tRef);
   }
-  epaper::hibernate();  // 断电 + 深睡护屏（静态画面保留）
+  epaper::powerOff();  // 断驱动电压、保持唤醒态（DSLP 深睡后唤不醒，v0.8.0 实测教训）
+  if (wifiWasOn) {
+    esp_wifi_start();
+    Serial.println("[屏] 射频已恢复，Wi-Fi 自动重连中");
+  }
   Serial.printf("[屏] 全刷完成 %.1fs（打包推送 %ums + 刷新等待 %ums）\n",
                 (millis() - t0) / 1000.0, (unsigned)tPack, (unsigned)(millis() - t1));
   return true;

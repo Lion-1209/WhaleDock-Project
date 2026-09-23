@@ -633,23 +633,26 @@ const netSet = (text, cls) => {
   badge.textContent = label;
 };
 const netButtons = (on) =>
-  ['btn-net-off', 'btn-net-refresh', 'btn-net-pipe', 'btn-net-ota', 'btn-net-reboot']
+  ['btn-net-off', 'btn-net-refresh', 'btn-net-pipe', 'btn-net-demo', 'btn-net-ota', 'btn-net-reboot']
     .forEach((id) => { $(id).disabled = !on; });
 
 async function netFetch(path, opts = {}) {
-  // GET 不带自定义头（避免触发 CORS 预检）；POST 仅在有 body 时声明 JSON
+  // GET 不带自定义头（避免触发 CORS 预检）；POST 仅在未显式给头且有 body 时声明 JSON
   const init = { ...opts };
-  if (opts.body) init.headers = { 'Content-Type': 'application/json' };
+  if (opts.body && !opts.headers) init.headers = { 'Content-Type': 'application/json' };
   const r = await fetch(netBase + path, init);
   return r.json();
 }
 
+let netBusy = false;  // 推图等长操作期间暂停轮询，避免误判断线
 async function netPoll() {
+  if (netBusy) return;
   try {
     const s = await netFetch('/api/status');
     netSet(`v${s.version} · ${s.wifi.ssid} ${s.wifi.ip}（${s.wifi.state}，${s.wifi.rssi} dBm）\n${s.time} · 堆 ${s.heap} KB · @${s.partition}`,
       s.wifi.state === '已连接' ? 'ok' : 'warn');
   } catch (e) {
+    if (netBusy) return;  // 长操作期间的轮询失败不处理
     netSet('连接中断：' + e.message, 'warn');
     netStop();
   }
@@ -686,6 +689,86 @@ $('btn-net-pipe').addEventListener('click', async () => {
   netSet('流水执行中（数秒，结果落缓存）…');
   await netFetch('/api/pipe', { method: 'POST' });
   netPoll();
+});
+
+// ---- B3 位图通道：网页生成测试图 → 三平面分块 b64 → /api/display/* ----
+// 提取规则与固件/协议位级一致：红 #b3382c / 黄 #d4a017 / 暗 <160 归黑 / 其余白
+function buildDemoPlanes() {
+  const cv = document.createElement('canvas');
+  cv.width = 800; cv.height = 480;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#f5f4ef'; ctx.fillRect(0, 0, 800, 480);
+  ctx.fillStyle = '#1c1c1c';
+  ctx.font = 'bold 64px system-ui, sans-serif';
+  ctx.fillText('鲸屿 WhaleDock', 40, 96);
+  ctx.font = '28px system-ui, sans-serif';
+  ctx.fillStyle = '#b3382c';
+  ctx.fillRect(40, 140, 320, 56);
+  ctx.fillStyle = '#f5f4ef';
+  ctx.font = 'bold 28px system-ui, sans-serif';
+  ctx.fillText('RED 一级强调', 60, 177);
+  ctx.fillStyle = '#d4a017';
+  ctx.fillRect(400, 140, 200, 56);
+  ctx.fillStyle = '#1c1c1c';
+  ctx.font = 'bold 28px system-ui, sans-serif';
+  ctx.fillText('YELLOW', 430, 177);
+  for (let y = 260; y < 420; y += 40)          // 棋盘格（几何校验）
+    for (let x = 40; x < 760; x += 40)
+      if (((x / 40) + (y / 40)) % 2 === 0) {
+        ctx.fillStyle = '#1c1c1c'; ctx.fillRect(x, y, 40, 40);
+      }
+  ctx.strokeStyle = '#1c1c1c'; ctx.lineWidth = 4;
+  ctx.strokeRect(6, 6, 788, 468);
+  const now = new Date();
+  const ts = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+  ctx.fillStyle = '#1c1c1c';
+  ctx.font = '24px system-ui, sans-serif';
+  ctx.fillText(`B3 位图通道推图测试 ${ts}`, 40, 452);
+  // 像素 → 三平面
+  const d = ctx.getImageData(0, 0, 800, 480).data;
+  const mk = () => new Uint8Array(48000);
+  const planes = { bw: mk(), red: mk(), yellow: mk() };
+  for (let y = 0; y < 480; y++) for (let x = 0; x < 800; x++) {
+    const i = (y * 800 + x) * 4, r = d[i], g = d[i + 1], b = d[i + 2];
+    const byte = y * 100 + (x >> 3), mask = 0x80 >> (x & 7);
+    if (r >= 140 && g < 115 && b < 115) planes.red[byte] |= mask;
+    else if (r >= 170 && g >= 130 && b < 100) planes.yellow[byte] |= mask;
+    else if (r < 160 && g < 160 && b < 160) planes.bw[byte] |= mask;
+  }
+  return planes;
+}
+
+$('btn-net-demo').addEventListener('click', async () => {
+  netBusy = true;
+  $('btn-net-demo').disabled = true;
+  try {
+    const planes = buildDemoPlanes();
+    const steps = [['bw', planes.bw], ['red', planes.red], ['yellow', planes.yellow]];
+    let n = 0;
+    for (const [name, plane] of steps) {
+      for (let off = 0; off < 48000; off += 12000) {
+        const bytes = plane.slice(off, off + 12000);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000)
+          bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+        const r = await netFetch(`/api/display/${name}?off=${off}`,
+          { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: btoa(bin) });
+        if (!r.ok) throw new Error(r.msg || '设备拒绝');
+        netSet(`推图中：${name} 平面 ${off / 12000 + 1}/4 …`);
+        n++;
+      }
+    }
+    netSet('三平面已推送（12 块），触发全刷（约 22s，期间设备无响应）…');
+    const r = await netFetch('/api/display/flush', { method: 'POST', body: '' });
+    if (!r.ok) throw new Error(r.msg || 'flush 受理失败');
+    netSet(`已受理：${n} 块推送完成，约 22s 后上屏（勿重复推送）`, 'ok');
+    setTimeout(() => { netBusy = false; $('#btn-net-demo').disabled = false; netPoll(); }, 26000);  // 刷新窗口内保持静默
+    return;
+  } catch (e) {
+    netSet('推图失败：' + e.message, 'warn');
+  }
+  netBusy = false;
+  $('btn-net-demo').disabled = false;
 });
 $('btn-net-ota').addEventListener('click', async () => {
   if (!confirm('从 GitHub 最新 Release 升级固件？设备将下载并重启。')) return;

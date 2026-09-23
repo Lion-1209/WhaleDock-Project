@@ -12,6 +12,12 @@
 //   POST /api/pipe          立即执行一轮数据流水（阻塞至完成）
 //   POST /api/ota           {url} 启动 OTA（先应答后执行，成功即重启）
 //   POST /api/reboot        重启设备
+//   POST /api/display/bw|red|yellow?off=<字节偏移>  B3 位图通道：body=该块
+//        裸数据的 base64（≤12000 字节/块，48000B 平面分 4 块；分块规避
+//        WebServer plain 参数对内嵌 NUL 的截断与大 body 内存峰值）
+//   POST /api/display/flush 位图上屏（未推平面=全白）。先应答"已受理"后
+//        执行：约 22s 完成上屏（长阻塞会杀死 TCP 故先应答；期间射频静默
+//        + BUSY 保险丝保护刷新波形）
 //
 // 安全边界（v1 如实）：仅监听 STA（不对外网），无鉴权——限可信局域网；
 // 量产前评估加配对码。长操作（pipe/ota）在 HTTP 线程内阻塞执行，属

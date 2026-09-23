@@ -6,9 +6,15 @@
 #include <WebServer.h>
 #include <WiFi.h>
 #include <esp_ota_ops.h>
+#include <mbedtls/base64.h>
 
+#include <string.h>
+
+#include "app/canvas.h"
+#include "app/epaper_selftest.h"
 #include "config.h"
 #include "datapipe.h"
+#include "drivers/epaper.h"
 #include "ntp.h"
 #include "ota.h"
 #include "storage.h"
@@ -159,6 +165,89 @@ void hReboot() {
   ESP.restart();
 }
 
+// ---- B3 位图通道（协议 §7 display 的 HTTP 装载形态）----
+// 传输采用分块 b64：POST /api/display/{bw|red|yellow}?off=<字节偏移>，
+// body = 该块裸数据的 base64（每块 ≤12000 字节）。两重原因：
+//   ① WebServer 的 plain 参数按 String(char*) 构造，内嵌 NUL 的二进制会被
+//     截断（实测全零平面 body.length()==0）；
+//   ② 一次性 64-192KB body 的 String 增长峰值有 OOM 风险，分块后每块峰值 <50KB。
+// 全部推完 flush 上屏；语义对齐 §7：flush 时未推送的平面 = 全白。
+constexpr size_t kChunkRaw = 12000;  // 每块裸字节数上限（b64 后 16000 字符）
+uint8_t sPlaneSeen = 0;              // bit0 BW / bit1 RED / bit2 YELLOW，flush 后清零
+
+void recvPlane(uint8_t idx, const char* name) {
+  const String ctype = server.header("Content-Type");
+  if (ctype.length() && (ctype.startsWith("application/x-www-form-urlencoded") || ctype.startsWith("multipart/"))) {
+    // form 类 Content-Type 会被 WebServer 当表单解析，body 不进 arg("plain")
+    // （curl --data / urllib 默认就是 form-urlencoded，实测 400 且日志报
+    //  _parseArguments arg missing value）——客户端须显式 text/plain
+    sendErr(400, "Content-Type 勿用 form 类，请 text/plain 直发 base64");
+    return;
+  }
+  if (!server.hasArg("off")) {
+    sendErr(400, "需 ?off=<字节偏移>（0..47999，4 的倍数）");
+    return;
+  }
+  const long off = server.arg("off").toInt();
+  const String& b64 = server.arg("plain");
+  if (off < 0 || off >= canvas::PLANE_BYTES || off % 4 != 0 || b64.isEmpty() ||
+      b64.length() > ((kChunkRaw + 2) / 3) * 4) {  // b64 长度 = ceil(裸字节/3)*4
+    sendErr(400, "off 越界或 b64 块尺寸非法（每块 ≤12000 字节）");
+    return;
+  }
+  size_t rawLen = 0;
+  const int rc = mbedtls_base64_decode(nullptr, 0, &rawLen, (const uint8_t*)b64.c_str(), b64.length());
+  if (rc != 0 && rc != MBEDTLS_ERR_BASE64_BUFFER_TOO_SMALL) {  // 探长调用按约定返回 TOO_SMALL
+    sendErr(400, "base64 解析失败");
+    return;
+  }
+  if (off + rawLen > canvas::PLANE_BYTES) {
+    sendErr(400, "块超出平面（48000 字节）");
+    return;
+  }
+  if (!canvas::get().begin()) {
+    sendErr(503, "PSRAM 三平面分配失败");
+    return;
+  }
+  static uint8_t chunk[kChunkRaw];  // 12KB 静态中转（避免栈上大缓冲）
+  size_t written = 0;
+  if (mbedtls_base64_decode(chunk, sizeof(chunk), &written, (const uint8_t*)b64.c_str(), b64.length()) || written != rawLen) {
+    sendErr(400, "base64 解码异常");
+    return;
+  }
+  memcpy(canvas::get().plane(idx) + off, chunk, rawLen);
+  sPlaneSeen |= 1 << idx;
+  char msg[64];
+  snprintf(msg, sizeof(msg), "%s +[%ld,%zu)", name, off, rawLen);
+  sendOk(msg);
+}
+
+void hDisplayBw() { recvPlane(canvas::PL_BW, "黑白平面"); }
+void hDisplayRed() { recvPlane(canvas::PL_RED, "红平面"); }
+void hDisplayYellow() { recvPlane(canvas::PL_YELLOW, "黄平面"); }
+
+void hDisplayFlush() {
+  if (!SCREEN_ATTACHED) {
+    sendErr(503, "SCREEN_ATTACHED=false，屏未启用");
+    return;
+  }
+  if (!canvas::get().begin()) {
+    sendErr(503, "PSRAM 三平面分配失败");
+    return;
+  }
+  for (uint8_t p = 0; p < 3; p++)  // 协议 §7：省略的平面 = 全白
+    if (!(sPlaneSeen & (1 << p))) memset(canvas::get().plane(p), 0, canvas::PLANE_BYTES);
+  sPlaneSeen = 0;
+  // 先应答后执行：22s 阻塞期间 TCP 会被断（errno 113 实测），客户端拿到
+  // 的是连接中断而非结果——应答改为"已受理"，刷新结果看设备日志/屏
+  sendOk("已受理：约 22s 完成上屏（期间设备无响应，勿重复推送）");
+  server.handleClient();  // 把应答真正送出去
+  delay(200);
+  Serial.println("[Web] 位图通道 flush：整帧上屏…");
+  epaper::init();  // RST 脉冲唤醒/复位面板（幂等）
+  canvas::flush();  // 内部含射频静默、BUSY 保险丝与全刷计时
+}
+
 void registerRoutes() {
   server.on("/api/status", HTTP_GET, hStatus);
   server.on("/api/config", HTTP_GET, hConfigGet);
@@ -167,11 +256,19 @@ void registerRoutes() {
   server.on("/api/pipe", HTTP_POST, hPipe);
   server.on("/api/ota", HTTP_POST, hOta);
   server.on("/api/reboot", HTTP_POST, hReboot);
+  server.on("/api/display/bw", HTTP_POST, hDisplayBw);
+  server.on("/api/display/red", HTTP_POST, hDisplayRed);
+  server.on("/api/display/yellow", HTTP_POST, hDisplayYellow);
+  server.on("/api/display/flush", HTTP_POST, hDisplayFlush);
   // 各路径的 CORS 预检
   const char* paths[] = {"/api/status", "/api/config", "/api/wifi",
-                         "/api/pipe", "/api/ota", "/api/reboot"};
+                         "/api/pipe", "/api/ota", "/api/reboot",
+                         "/api/display/bw", "/api/display/red",
+                         "/api/display/yellow", "/api/display/flush"};
   for (const char* p : paths) server.on(p, HTTP_OPTIONS, handleOptions);
   server.onNotFound([]() { sendErr(404, "not found（API 见 /api/*）"); });
+  const char* collect[] = {"Content-Type"};  // recvPlane 的 form 类防御需要读它
+  server.collectHeaders(collect, 1);
   server.enableCORS(true);
 }
 

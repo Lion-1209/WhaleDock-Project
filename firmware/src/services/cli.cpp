@@ -11,8 +11,12 @@
 #include "github.h"
 #include "ntp.h"
 #include "ota.h"
+#include "drivers/epaper.h"
+#include "pins.h"
 #include "storage.h"
 #include "wifi.h"
+
+#include <SPI.h>
 
 namespace cli {
 
@@ -42,6 +46,7 @@ void printHelp() {
   Serial.println("  ota status               固件版本/分区状态");
   Serial.println("  ota <url>                下载 .bin 升级（写备用分区后重启）");
   Serial.println("  ota confirm|rollback     确认新固件 / 回滚旧版本");
+  Serial.println("  probe                    位读屏控制器 REV+PON 轨迹（硬件排障）");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -248,6 +253,95 @@ void cmdLayout(char* rest) {
   }
 }
 
+// B3 排障工具集：位读 REV / 对照组 / PON·DRF 轨迹 / SPI 引脚出波自检
+namespace {
+void bbPinsOut() {
+  SPI.end();
+  pinMode(EPD_CS, OUTPUT);
+  pinMode(EPD_DC, OUTPUT);
+  pinMode(EPD_CLK, OUTPUT);
+  pinMode(EPD_DIN, OUTPUT);
+  pinMode(EPD_RST, OUTPUT);
+  pinMode(EPD_BUSY, INPUT);
+  digitalWrite(EPD_CLK, LOW);
+}
+void bbCmd(uint8_t c, bool dcHigh) {  // 位发一字节（CS 由调用者管理）
+  digitalWrite(EPD_DC, dcHigh ? HIGH : LOW);
+  pinMode(EPD_DIN, OUTPUT);
+  for (int i = 7; i >= 0; i--) {
+    digitalWrite(EPD_DIN, (c >> i) & 1);
+    delayMicroseconds(3);
+    digitalWrite(EPD_CLK, HIGH);
+    delayMicroseconds(3);
+    digitalWrite(EPD_CLK, LOW);
+    delayMicroseconds(3);
+  }
+}
+void bbRead3(bool csLow) {  // 位读 REV(0x70) 3 字节；csLow=false 为对照组（CS 悬高）
+  digitalWrite(EPD_CS, csLow ? LOW : HIGH);
+  delayMicroseconds(4);
+  if (csLow) bbCmd(0x70, false);
+  digitalWrite(EPD_DC, HIGH);
+  pinMode(EPD_DIN, INPUT);
+  delayMicroseconds(4);
+  uint8_t out[3] = {0, 0, 0};
+  for (int b = 0; b < 3; b++)
+    for (int i = 7; i >= 0; i--) {
+      digitalWrite(EPD_CLK, HIGH);
+      delayMicroseconds(3);
+      digitalWrite(EPD_CLK, LOW);
+      delayMicroseconds(3);
+      out[b] = (out[b] << 1) | (digitalRead(EPD_DIN) ? 1 : 0);
+    }
+  digitalWrite(EPD_CS, HIGH);
+  Serial.printf("[probe] REV(CS=%s)=%02X %02X %02X\n", csLow ? "L" : "H", out[0], out[1], out[2]);
+}
+int bbBusyTrace(int ms) {  // BUSY 轨迹，返回低电平毫秒数
+  int lowMs = 0;
+  String tr;
+  for (int i = 0; i < ms; i++) {
+    const bool busy = !digitalRead(EPD_BUSY);
+    if (busy) lowMs++;
+    if (i < 400) {
+      tr += busy ? 'L' : 'H';
+      if (i % 50 == 49) tr += '|';
+    }
+    delay(1);
+  }
+  Serial.printf("[probe] BUSY 轨迹(前400ms)：%s\n", tr.c_str());
+  return lowMs;
+}
+}  // namespace
+
+void cmdProbe() {
+  Serial.println("[probe] RST 复位后位读 REV(0x70) …");
+  bbPinsOut();
+  // ① 硬复位面板（深睡/异常态唯一出口），等它完成内部初始化
+  digitalWrite(EPD_RST, HIGH);
+  delay(10);
+  digitalWrite(EPD_RST, LOW);
+  delay(100);
+  digitalWrite(EPD_RST, HIGH);
+  delay(100);
+  // ② 真读（CS 拉低）vs ③ 对照组（CS 悬高，应答应全 0/1 = 悬空耦合噪声）
+  bbRead3(true);
+  bbRead3(false);
+  // ④ PON + DRF 位发，看升压/刷新是否真执行（BUSY 低=忙；正常 PON≈119ms、DRF≈21.8s）
+  Serial.println("[probe] 位发 PON(0x04)…");
+  digitalWrite(EPD_CS, LOW);
+  bbCmd(0x04, false);
+  digitalWrite(EPD_CS, HIGH);
+  int ponLow = bbBusyTrace(400);
+  Serial.printf("[probe] PON 忙 %dms（正常 ~119ms；0=未执行，7=启动即溃）\n", ponLow);
+  Serial.println("[probe] 位发 DRF(0x12)，观察 6s …");
+  digitalWrite(EPD_CS, LOW);
+  bbCmd(0x12, false);
+  digitalWrite(EPD_CS, HIGH);
+  int drfLow = bbBusyTrace(6000);
+  Serial.printf("[probe] DRF 忙 %dms/6000ms（正常 21800ms——只验证是否启动）\n", drfLow);
+  SPI.begin(EPD_CLK, -1, EPD_DIN, -1);
+}
+
 void dispatch(char* line) {
   if (!*line) return;
   char* sp = strchr(line, ' ');
@@ -282,6 +376,8 @@ void dispatch(char* line) {
     } else {
       Serial.println("[CLI] 格式：screen test");
     }
+  } else if (!strcmp(line, "probe")) {
+    cmdProbe();
   } else if (!strcmp(line, "pipe")) {
     datapipe::runOnce("手动");
   } else if (!strcmp(line, "ota")) {

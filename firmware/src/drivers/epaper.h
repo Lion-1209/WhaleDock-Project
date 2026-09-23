@@ -30,11 +30,12 @@
 
 namespace epaper {
 
-using DriverT = GxEPD2_750c_GDEM075F52;  // 定稿（09-22 B1 实测定案：屏物理 800×480）
+using DriverT = GxEPD2_750c_GDEM075F52;  // 库原生定稿（注意：构造第 6 参 50000000 是 BUSY 超时 50s，非 SPI 频率）
 // using DriverT = GxEPD2_750c_DFG0750RYS;  // 880×528 实验（已排除，见文件头）
 
 void init();          // SPI2 初始化 + 控制脚预配置（不做清屏，开机由 canvas 整帧推送）
 DriverT& driver();    // 驱动实例：canvas::flush 分页推送 / 全刷入口
-void hibernate();     // 深度下电保护屏体，静态画面保留
+void powerOff();      // 断面板驱动电压但保持唤醒态（flush 尾部默认；屏体静态画面保留）
+void hibernate();     // 深度下电（DSLP 深睡，µA 级）——实测深睡后 RST 唤不醒，暂不使用
 
 }  // namespace epaper
