@@ -7,6 +7,7 @@
 #include <WiFiClientSecure.h>
 #include <esp_ota_ops.h>
 
+#include "certs.h"
 #include "config.h"
 #include "wifi.h"
 
@@ -78,7 +79,7 @@ void rollbackNow() {
   esp_ota_mark_app_invalid_rollback_and_reboot();
 }
 
-void fromUrl(const char* url) {
+void fromUrl(const char* url, const char* md5) {
   if (wifi::state() != wifi::State::Connected) {
     Serial.println("[OTA] Wi-Fi 未连接，无法下载");
     return;
@@ -90,8 +91,8 @@ void fromUrl(const char* url) {
   WiFiClient plain;
   HTTPClient http;
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-  const bool secure = strncmp(url, "http://", 7) != 0;
-  const bool begun = secure ? (tls.setInsecure(), http.begin(tls, url))
+  const bool secure = strncasecmp(url, "http://", 7) != 0;  // 大小写不敏感（HTTP:// 误判会致 TLS 客户端连明文口）
+  const bool begun = secure ? (tls.setCACert(kGithubRoots), http.begin(tls, url))
                             : http.begin(plain, url);
   if (!begun) {
     Serial.println("[OTA] URL 无效");
@@ -120,6 +121,19 @@ void fromUrl(const char* url) {
     http.end();
     return;
   }
+  // 完整性校验：提供 md5 则启用（防"长度正确的损坏/篡改镜像"）；
+  // Update.end 内部完成 MD5 比对，不匹配自动拒绝
+  if (md5 && *md5) {
+    if (!Update.setMD5(md5)) {
+      Serial.println("[OTA] md5 格式非法（应 32 位十六进制），拒绝写入");
+      Update.abort();
+      http.end();
+      return;
+    }
+    Serial.println("[OTA] 已启用 MD5 完整性校验");
+  } else {
+    Serial.println("[OTA] ⚠ 未提供 md5，跳过完整性校验（建议 CLI/网页升级带上 Release 的 md5）");
+  }
   const size_t written = Update.writeStream(http.getStream());
   http.end();
   if (written != (size_t)total) {
@@ -129,11 +143,11 @@ void fromUrl(const char* url) {
     return;
   }
   if (!Update.end(true)) {
-    Serial.printf("[OTA] 固件校验失败：%s，当前固件未受影响\n",
+    Serial.printf("[OTA] 收尾失败：%s（内容不完整或 md5 不匹配），当前固件未受影响\n",
                   Update.errorString());
     return;
   }
-  Serial.println("[OTA] 写入完成，校验通过。2s 后重启进入新固件…");
+  Serial.println("[OTA] 写入完成，完整性校验通过。2s 后重启进入新固件…");
   delay(2000);
   ESP.restart();
 }

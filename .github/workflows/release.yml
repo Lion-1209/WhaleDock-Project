@@ -33,13 +33,19 @@ jobs:
         working-directory: firmware
         run: pio run
 
+      - name: Generate firmware MD5
+        # OTA 完整性校验用：设备端/console 升级时随 URL 携带（直链 + ".md5" 可取）
+        working-directory: firmware/.pio/build/whaledock
+        run: md5sum firmware.bin > firmware.bin.md5
+
       - name: Create release with firmware assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
             firmware/.pio/build/whaledock/firmware.bin \
+            firmware/.pio/build/whaledock/firmware.bin.md5 \
             firmware/.pio/build/whaledock/bootloader.bin \
             firmware/.pio/build/whaledock/partitions.bin \
             --title "鲸屿固件 $GITHUB_REF_NAME" \
-            --notes "自动构建。设备端可经 OTA 直链升级：releases/latest/download/firmware.bin"
+            --notes "自动构建。设备端可经 OTA 直链升级：releases/latest/download/firmware.bin（console 升级卡自动携带 .md5 完整性校验）"

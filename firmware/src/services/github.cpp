@@ -6,6 +6,7 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 
+#include "certs.h"
 #include "config.h"
 #include "ntp.h"
 #include "storage.h"
@@ -54,24 +55,25 @@ String nowStamp() {
 
 
 // 统一 GET：成功返回 200 且填充 payload；返回值<0 为网络层错误，>0 为 HTTP 状态码
-int16_t get(const String& path, String& payload) {
+int get(const String& path, String& payload) {
   const bool proxied = GITHUB_PROXY_PREFIX[0] != '\0';
+  if (proxied && strncmp(GITHUB_PROXY_PREFIX, "https://", 8) != 0) {
+    Serial.println("[GitHub] 代理前缀必须 https://（明文中转会把 Bearer 头暴露给同网段，已禁用）");
+    return -2;
+  }
+  if (!ntp::synced()) {
+    Serial.println("[GitHub] 未完成 NTP 对时（证书有效期校验需正确时间），稍后再试");
+    return -2;
+  }
   const String url = proxied ? String(GITHUB_PROXY_PREFIX) + path
                              : String(GITHUB_API_BASE) + path;
 
   // 客户端对象必须与 http 同层存活到 end()：HTTPClient 只持指针，
   // 分支内局部变量会在 GET() 前析构导致野指针
   WiFiClientSecure tls;
-  WiFiClient plain;
   HTTPClient http;
-  bool begun;
-  if (proxied && strncmp(GITHUB_PROXY_PREFIX, "https://", 8) != 0) {
-    begun = http.begin(plain, url);  // http:// 代理中转走明文
-  } else {
-    tls.setInsecure();  // TODO：正式版证书校验（设计文档风险表项）
-    begun = http.begin(tls, url);
-  }
-  if (!begun) return -1;
+  tls.setCACert(kGithubRoots);  // 根证书校验（替代 setInsecure，防 MITM 窃取 Bearer）
+  if (!http.begin(tls, url)) return -1;
 
   http.setTimeout(10000);
   http.addHeader("User-Agent", "WhaleDock-Firmware");
@@ -82,17 +84,17 @@ int16_t get(const String& path, String& payload) {
   storage::loadConfig(cfg);
   if (!cfg.githubToken.isEmpty())
     http.addHeader("Authorization", "Bearer " + cfg.githubToken);
-  const int16_t code = http.GET();
+  const int code = http.GET();
   if (code == HTTP_CODE_OK) payload = http.getString();
   http.end();
   return code;
 }
 
-String errOf(int16_t code) {
+String errOf(int code) {
   if (code < 0) {
-    String s = "网络错误(";
+    String s = "网络/TLS 错误(";
     s += code;
-    s += ")：检查网络/代理（GITHUB_PROXY_PREFIX）";
+    s += ")：检查网络可达性；若网络存在 TLS 拦截，改用 https 中转前缀";
     return s;
   }
   if (code == 202) return "HTTP 202：GitHub 统计计算中，稍后再试";
@@ -109,7 +111,7 @@ UserStats fetchUser(const char* login) {
   UserStats r;
   r.login = login;
   String body;
-  const int16_t code = get(String("/users/") + login, body);
+  const int code = get(String("/users/") + login, body);
   if (code != HTTP_CODE_OK) {
     r.error = errOf(code);
     return r;
@@ -132,7 +134,7 @@ RepoStats fetchRepo(const char* owner, const char* repo) {
   RepoStats r;
   r.fullName = String(owner) + "/" + repo;
   String body;
-  const int16_t code = get(String("/repos/") + owner + "/" + repo, body);
+  const int code = get(String("/repos/") + owner + "/" + repo, body);
   if (code != HTTP_CODE_OK) {
     r.error = errOf(code);
     return r;
@@ -157,7 +159,7 @@ CommitActivity fetchCommitActivity(const char* owner, const char* repo) {
   // 连认证访问都 404），改用 /stats/participation——同为 52 周提交序列，
   // 语义等价且响应更轻（{all:[52], owner:[52]}，all = 全体贡献者合计）
   String body;
-  const int16_t code =
+  const int code =
       get(String("/repos/") + owner + "/" + repo + "/stats/participation", body);
   if (code != HTTP_CODE_OK) {
     r.error = code == 404 ? String("仓库不存在，或 GitHub 无统计数据（接口返回 404）")

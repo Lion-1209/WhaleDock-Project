@@ -26,8 +26,37 @@ namespace {
 
 WebServer server(80);
 bool sMdnsStarted = false;
+IPAddress sMdnsIp;  // IP 变化时需重注册 mDNS（V7）
+
+// ---- 设备配对码（V1）：eFuse MAC 派生 6 位数字，出厂贴机身标签 ----
+// 同网段未授权者无法调用写操作端点（改配网/OTA/重启/推屏/改配置）
+String deviceKey() {
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%06u", (unsigned)(ESP.getEfuseMac() % 1000000));
+  return String(buf);
+}
+
+bool keyOk() { return server.header("X-Device-Key") == deviceKey(); }
+
+// ---- CORS 收敛（V4）：Origin 白名单（console 线上版 + 本地调试）----
+// 教训（b2c75eb）：响应头只在此处加一次，勿与 enableCORS 叠加
+void addCors() {
+  const String o = server.header("Origin");
+  if (!o.length()) return;  // 非 CORS 请求（curl / 同源）不加头
+  const bool ok = o == "https://lion-1209.github.io" ||
+                  o.startsWith("http://localhost:") ||
+                  o.startsWith("http://127.0.0.1:");
+  if (!ok) return;
+  server.sendHeader("Access-Control-Allow-Origin", o);
+  server.sendHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  server.sendHeader("Access-Control-Allow-Headers", "Content-Type, X-Device-Key");
+  // Chromium 局域网访问策略（LNA）：localhost 页面访问局域网设备时，带自定义头
+  // 的预检必须携带此头，否则 fetch 挂起（实测 127.0.0.1 页面 → 设备 IP 场景）
+  server.sendHeader("Access-Control-Allow-Private-Network", "true");
+}
 
 void sendJson(int code, const String& body) {
+  addCors();
   server.send(code, "application/json", body);
 }
 
@@ -49,10 +78,9 @@ void sendErr(int code, const char* msg) {
   sendJson(code, out);
 }
 
-// CORS 预检：enableCORS(true) 会给所有响应自动加 CORS 头，
-// 这里绝不能再手动加——重复的 Access-Control-Allow-Origin 头会被浏览器
-// 判定非法（curl 不检查，浏览器直接拒绝），预检即失败
+// CORS 预检：白名单 Origin 回显 + 允许 X-Device-Key（自定义头必过预检）
 void handleOptions() {
+  addCors();
   server.send(204, "text/plain", "");
 }
 
@@ -67,19 +95,20 @@ const char* wifiStateName() {
 }
 
 void hStatus() {
+  const bool full = keyOk();
   JsonDocument doc;
   doc["version"] = FW_VERSION;
   doc["uptime"] = millis() / 1000;
   doc["heap"] = ESP.getFreeHeap() / 1024;
   doc["psram"] = ESP.getFreePsram() / 1024;
   doc["wifi"]["state"] = wifiStateName();
-  doc["wifi"]["ssid"] = wifi::ssid();
+  doc["wifi"]["ssid"] = full ? wifi::ssid() : "*";  // V8：无配对码时脱敏
   doc["wifi"]["ip"] = wifi::ip();
   doc["wifi"]["rssi"] =
       wifi::state() == wifi::State::Connected ? WiFi.RSSI() : 0;
   doc["time"] = ntp::timeString();
   doc["ntpSynced"] = ntp::synced();
-  doc["partition"] = esp_ota_get_running_partition()->label;
+  if (full) doc["partition"] = esp_ota_get_running_partition()->label;
   String out;
   serializeJson(doc, out);
   sendJson(200, out);
@@ -97,7 +126,29 @@ void hConfigGet() {
   sendJson(200, out);
 }
 
+// V9：网络输入长度与字符集校验（防 LittleFS 撑爆与 URL 拼接注入）
+bool validIdent(const String& v, bool allowSlash) {
+  if (v.length() < 1 || v.length() > 64) return false;
+  for (const char c : v) {
+    const bool ok = isalnum((unsigned char)c) || c == '-' || c == '_' ||
+                    c == '.' || (allowSlash && c == '/');
+    if (!ok) return false;
+  }
+  return true;
+}
+
+bool validToken(const String& v) {
+  if (v.length() > 255) return false;
+  for (const char c : v)
+    if (c < 0x21 || c > 0x7E) return false;  // 可见 ASCII，无空格
+  return true;
+}
+
 void hConfigPost() {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
   JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) {
     sendErr(400, "JSON 解析失败");
@@ -107,20 +158,42 @@ void hConfigPost() {
   storage::loadConfig(c);
   if (!doc["githubUser"].isNull()) {
     const String v = doc["githubUser"].as<String>();
-    if (v.length()) c.githubUser = v == "-" ? "" : v;
+    if (v.length()) {
+      if (v != "-" && !validIdent(v, false)) {
+        sendErr(400, "githubUser 非法（≤64，[A-Za-z0-9_.-]）");
+        return;
+      }
+      c.githubUser = v == "-" ? "" : v;
+    }
   }
   if (!doc["githubRepo"].isNull()) {
     const String v = doc["githubRepo"].as<String>();
-    if (v.length()) c.githubRepo = v == "-" ? "" : v;
+    if (v.length()) {
+      if (v != "-" && !validIdent(v, true)) {
+        sendErr(400, "githubRepo 非法（≤64，[A-Za-z0-9_.-/]）");
+        return;
+      }
+      c.githubRepo = v == "-" ? "" : v;
+    }
   }
   if (!doc["githubToken"].isNull()) {
     const String v = doc["githubToken"].as<String>();
-    if (v.length()) c.githubToken = v == "-" ? "" : v;
+    if (v.length()) {
+      if (v != "-" && !validToken(v)) {
+        sendErr(400, "githubToken 非法（≤255 可见字符）");
+        return;
+      }
+      c.githubToken = v == "-" ? "" : v;
+    }
   }
   sendOk(storage::saveConfig(c) ? "已保存" : "保存失败（文件系统）");
 }
 
 void hWifiPost() {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
   JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) {
     sendErr(400, "JSON 解析失败");
@@ -128,8 +201,8 @@ void hWifiPost() {
   }
   const String ssid = doc["ssid"] | "";
   const String pass = doc["pass"] | "";
-  if (!ssid.length() || pass.length() < 8) {
-    sendErr(400, "ssid 必填且 pass >= 8 位");
+  if (!ssid.length() || ssid.length() > 32 || pass.length() < 8 || pass.length() > 64) {
+    sendErr(400, "ssid 必填（≤32）且 pass 8-64 位");
     return;
   }
   wifi::connect(ssid.c_str(), pass.c_str());
@@ -142,6 +215,10 @@ void hPipe() {
 }
 
 void hOta() {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
   JsonDocument doc;
   if (deserializeJson(doc, server.arg("plain"))) {
     sendErr(400, "JSON 解析失败");
@@ -152,13 +229,18 @@ void hOta() {
     sendErr(400, "url 必须以 http 开头");
     return;
   }
+  const String md5 = doc["md5"] | "";  // 可选：Release 附件 .md5（强烈建议）
   sendOk("升级启动：下载写入后设备将重启（期间 API 短暂无响应）");
   server.handleClient();  // 尽量把应答送出去
   delay(300);
-  ota::fromUrl(url.c_str());  // 成功则内部重启，失败则返回
+  ota::fromUrl(url.c_str(), md5.isEmpty() ? nullptr : md5.c_str());
 }
 
 void hReboot() {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
   sendOk("重启中…");
   server.handleClient();
   delay(500);
@@ -176,6 +258,10 @@ constexpr size_t kChunkRaw = 12000;  // 每块裸字节数上限（b64 后 16000
 uint8_t sPlaneSeen = 0;              // bit0 BW / bit1 RED / bit2 YELLOW，flush 后清零
 
 void recvPlane(uint8_t idx, const char* name) {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
   const String ctype = server.header("Content-Type");
   if (ctype.length() && (ctype.startsWith("application/x-www-form-urlencoded") || ctype.startsWith("multipart/"))) {
     // form 类 Content-Type 会被 WebServer 当表单解析，body 不进 arg("plain")
@@ -227,6 +313,10 @@ void hDisplayRed() { recvPlane(canvas::PL_RED, "红平面"); }
 void hDisplayYellow() { recvPlane(canvas::PL_YELLOW, "黄平面"); }
 
 void hDisplayFlush() {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
   if (!SCREEN_ATTACHED) {
     sendErr(503, "SCREEN_ATTACHED=false，屏未启用");
     return;
@@ -267,9 +357,9 @@ void registerRoutes() {
                          "/api/display/yellow", "/api/display/flush"};
   for (const char* p : paths) server.on(p, HTTP_OPTIONS, handleOptions);
   server.onNotFound([]() { sendErr(404, "not found（API 见 /api/*）"); });
-  const char* collect[] = {"Content-Type"};  // recvPlane 的 form 类防御需要读它
-  server.collectHeaders(collect, 1);
-  server.enableCORS(true);
+  // 收集的请求头：Content-Type（form 防御）/ Origin 与 X-Device-Key（CORS 与配对码）
+  const char* collect[] = {"Content-Type", "Origin", "X-Device-Key"};
+  server.collectHeaders(collect, 3);
 }
 
 }  // namespace
@@ -281,13 +371,19 @@ void begin() {
 }
 
 void poll() {
-  // mDNS 依赖网络栈就绪，联网成功后注册一次
-  if (!sMdnsStarted && wifi::state() == wifi::State::Connected) {
-    const String host = "whaledock-" + String((uint16_t)(ESP.getEfuseMac() >> 32), HEX);
-    if (MDNS.begin(host.c_str())) {
+  // mDNS：联网后注册；IP 变化时重注册（旧注册会指向失效 IP，V7）。
+  // 后缀取 eFuse MAC 低 24 位（6 hex）——16 位空间在 40 台下生日碰撞
+  // ~1.2%，24 位降至 ~0.002%
+  if (wifi::state() == wifi::State::Connected &&
+      (!sMdnsStarted || sMdnsIp != WiFi.localIP())) {
+    char host[24];
+    snprintf(host, sizeof(host), "whaledock-%06llX",
+             (unsigned long long)(ESP.getEfuseMac() & 0xFFFFFF));
+    if (MDNS.begin(host)) {
       MDNS.addService("http", "tcp", 80);
-      Serial.printf("[Web] mDNS 已注册：http://%s.local\n", host.c_str());
+      sMdnsIp = WiFi.localIP();
       sMdnsStarted = true;
+      Serial.printf("[Web] mDNS 已注册：http://%s.local\n", host);
     }
   }
   server.handleClient();

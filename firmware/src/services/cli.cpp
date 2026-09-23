@@ -44,9 +44,10 @@ void printHelp() {
   Serial.println("  screen test              四色诊断图上屏（B2 管线验证图，全刷约 22s）");
   Serial.println("  pipe                     立即执行一轮数据流水（同整点动作）");
   Serial.println("  ota status               固件版本/分区状态");
-  Serial.println("  ota <url>                下载 .bin 升级（写备用分区后重启）");
+  Serial.println("  ota <url> [md5]          下载 .bin 升级（建议带 Release 的 md5 校验）");
   Serial.println("  ota confirm|rollback     确认新固件 / 回滚旧版本");
   Serial.println("  probe                    位读屏控制器 REV+PON 轨迹（硬件排障）");
+  Serial.println("  key                      显示设备配对码（局域网写操作 API 需要）");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -170,6 +171,10 @@ void cmdFs(char* rest) {
     *sp = '\0';
     arg = sp + 1;
   }
+  // V6：路径穿越防护（cat/rm 拒绝 .. 与空白名单路径；物理接触面有限防护）
+  const auto pathOk = [](const char* p) {
+    return strstr(p, "..") == nullptr;
+  };
   if (!strcmp(rest, "ls")) {
     const char* dir = *arg ? arg : "/";
     const auto names = storage::listDir(dir);
@@ -178,6 +183,10 @@ void cmdFs(char* rest) {
   } else if (!strcmp(rest, "cat")) {
     if (!*arg) {
       Serial.println("[CLI] 格式：fs cat <路径>");
+      return;
+    }
+    if (!pathOk(arg)) {
+      Serial.println("[FS] 路径非法（拒绝 ..）");
       return;
     }
     if (!storage::exists(arg)) {
@@ -189,6 +198,10 @@ void cmdFs(char* rest) {
   } else if (!strcmp(rest, "rm")) {
     if (!*arg) {
       Serial.println("[CLI] 格式：fs rm <路径>");
+      return;
+    }
+    if (!pathOk(arg)) {
+      Serial.println("[FS] 路径非法（拒绝 ..）");
       return;
     }
     Serial.println(storage::removeFile(arg) ? "[FS] 已删除" : "[FS] 删除失败（不存在？）");
@@ -217,12 +230,24 @@ void cmdConfig(char* rest) {
                   c.githubRepo.length() ? c.githubRepo.c_str() : "（未配置）",
                   c.githubToken.length() ? "已配置" : "未配置");
   } else if (!strcmp(rest, "user") && *arg) {
+    if (strcmp(arg, "-") && (strlen(arg) > 64 || strpbrk(arg, " /?&#@"))) {
+      Serial.println("[配置] githubUser 非法（≤64，限登录名字符）");
+      return;
+    }
     c.githubUser = arg;
     Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
   } else if (!strcmp(rest, "repo") && *arg) {
+    if (strcmp(arg, "-") && (strlen(arg) > 64 || strpbrk(arg, " ?&#@"))) {
+      Serial.println("[配置] githubRepo 非法（≤64，限 o/r 字符）");
+      return;
+    }
     c.githubRepo = !strcmp(arg, "-") ? "" : String(arg);
     Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
   } else if (!strcmp(rest, "token") && *arg) {
+    if (strcmp(arg, "-") && strlen(arg) > 255) {
+      Serial.println("[配置] githubToken 非法（≤255）");
+      return;
+    }
     c.githubToken = !strcmp(arg, "-") ? "" : String(arg);
     Serial.println(storage::saveConfig(c) ? "[配置] 已保存" : "[配置] 保存失败");
   } else {
@@ -378,6 +403,12 @@ void dispatch(char* line) {
     }
   } else if (!strcmp(line, "probe")) {
     cmdProbe();
+  } else if (!strcmp(line, "key")) {
+    // 设备配对码：同网段调用写操作 API（wifi/ota/reboot/display/config）须带
+    // X-Device-Key 头；码由 eFuse MAC 派生，量产时印机身标签
+    char key[8];
+    snprintf(key, sizeof(key), "%06u", (unsigned)(ESP.getEfuseMac() % 1000000));
+    Serial.printf("[配对码] %s（HTTP 写操作须带请求头 X-Device-Key: %s）\n", key, key);
   } else if (!strcmp(line, "pipe")) {
     datapipe::runOnce("手动");
   } else if (!strcmp(line, "ota")) {
@@ -388,9 +419,16 @@ void dispatch(char* line) {
     } else if (!strcmp(rest, "rollback")) {
       ota::rollbackNow();
     } else if (strncmp(rest, "http", 4) == 0) {
-      ota::fromUrl(rest);
+      // ota <url> [md5]：md5 来自 Release 附件 .md5，强烈建议携带（完整性校验）
+      char* sp = strchr(rest, ' ');
+      const char* md5 = nullptr;
+      if (sp) {
+        *sp = '\0';
+        md5 = sp + 1;
+      }
+      ota::fromUrl(rest, md5);
     } else {
-      Serial.println("[CLI] 格式：ota status | <url> | confirm | rollback");
+      Serial.println("[CLI] 格式：ota status | <url> [md5] | confirm | rollback");
     }
   } else if (!strcmp(line, "time")) {
     Serial.printf("[时间] %s（UTC+8）\n", ntp::timeString());

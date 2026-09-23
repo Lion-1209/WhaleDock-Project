@@ -139,7 +139,10 @@
         <p class="hint">串口之外的 Wi-Fi 直连通道（设备自动注册 <b>whaledock-xxxx.local</b>）。状态/流水/OTA/重启均可走网络；日志仍走串口。与串口通道互不干扰，<b>烧录/升级不再需要断开串口</b>。</p>
         <div class="net-left">
           <label>设备地址
-            <input id="net-host" type="text" placeholder="whaledock-xxxx.local 或 192.168.x.x" autocomplete="off">
+            <input id="net-host" type="text" placeholder="whaledock-xxxxxx.local 或 192.168.x.x" autocomplete="off">
+          </label>
+          <label>设备配对码
+            <input id="net-key" type="password" inputmode="numeric" maxlength="6" placeholder="6 位（设备串口输 key 查看）" autocomplete="off">
           </label>
           <div id="net-hint" class="hint" hidden></div>
           <div class="row">
@@ -172,6 +175,6 @@
 
   <footer>零后端 · Web Serial 直连 · 协议为固件串口 CLI（services/cli）</footer>
 
-  <script type="module" src="js/app.js?v=20260923a"></script>
+  <script type="module" src="js/app.js?v=20260923c"></script>
 </body>
 </html>

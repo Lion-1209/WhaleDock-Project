@@ -460,8 +460,10 @@ $('btn-send').addEventListener('click', sendCmd);
 $('btn-log-clear').addEventListener('click', () => { $('log').textContent = ''; });
 $('cmd').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendCmd(); });
 
+const maskSecret = (c) =>
+  c.replace(/^(config\s+token\s+)\S+$/, '$1******');
 const cmd = (c) => async () => {
-  appendLog(`> ${c}`);
+  appendLog(`> ${maskSecret(c)}`);  // token 类命令打码后才进日志
   try { await link.send(c); } catch (e) { appendLog(`[页面] 发送失败：${e.message}`); }
 };
 $('btn-status').addEventListener('click', cmd('wifi status'));
@@ -637,10 +639,15 @@ const netButtons = (on) =>
     .forEach((id) => { $(id).disabled = !on; });
 
 async function netFetch(path, opts = {}) {
-  // GET 不带自定义头（避免触发 CORS 预检）；POST 仅在未显式给头且有 body 时声明 JSON
-  const init = { ...opts };
-  if (opts.body && !opts.headers) init.headers = { 'Content-Type': 'application/json' };
+  // 写操作统一带 X-Device-Key（设备串口 CLI `key` 查看；localStorage 记住）；
+  // 自定义头会触发 CORS 预检，设备端 Origin 白名单已放行本页
+  const init = { cache: 'no-store', ...opts };  // 设备响应无缓存头，禁用启发式缓存（曾致状态页显示一小时前的旧数据）
+  const key = localStorage.getItem('wd_device_key') || '';
+  init.headers = { ...(opts.headers || {}) };
+  if (key) init.headers['X-Device-Key'] = key;
+  if (opts.body && !opts.headers) init.headers['Content-Type'] = 'application/json';
   const r = await fetch(netBase + path, init);
+  if (r.status === 401) throw new Error('配对码缺失或错误（右侧输入设备配对码，CLI key 查看）');
   return r.json();
 }
 
@@ -666,6 +673,10 @@ function netStop() {
   $('btn-net').disabled = false;
 }
 
+$('net-key').value = localStorage.getItem('wd_device_key') || '';
+$('net-key').addEventListener('input', () => {
+  localStorage.setItem('wd_device_key', $('net-key').value.trim());
+});
 $('btn-net').addEventListener('click', async () => {
   const h = $('net-host').value.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!h) { netSet('请输入设备地址（whaledock-xxxx.local 或 IP）', 'warn'); return; }
@@ -772,8 +783,13 @@ $('btn-net-demo').addEventListener('click', async () => {
 });
 $('btn-net-ota').addEventListener('click', async () => {
   if (!confirm('从 GitHub 最新 Release 升级固件？设备将下载并重启。')) return;
-  netSet('升级启动：下载写入后设备重启（约 1 分钟）…');
-  await netFetch('/api/ota', { method: 'POST', body: JSON.stringify({ url: OTA_LATEST }) });
+  netSet('升级启动：获取固件 MD5 → 下载写入 → 重启（约 1 分钟）…');
+  let md5 = '';
+  try {
+    const mr = await fetch(OTA_LATEST + '.md5');
+    if (mr.ok) md5 = (await mr.text()).trim().split(/\s+/)[0] || '';
+  } catch { /* md5 获取失败仍可升级（设备端会提示跳过校验） */ }
+  await netFetch('/api/ota', { method: 'POST', body: JSON.stringify({ url: OTA_LATEST, md5 }) });
   netStop();
   netSet('升级中…约 1 分钟后可重新连接');
 });
