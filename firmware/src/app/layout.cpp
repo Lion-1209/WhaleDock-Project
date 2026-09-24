@@ -155,6 +155,9 @@ CheckResult check(const String& json) {
           JsonArray labels = w["labels"];
           if (labels && labels.size() != fields.size())
             r.errors += "规则8: labels 与 fields 数量不一致\n";
+          JsonArray vals = w["values"];
+          if (vals && vals.size() != fields.size())
+            r.errors += "规则8: values 与 fields 数量不一致\n";
         }
       }
       // 摘要

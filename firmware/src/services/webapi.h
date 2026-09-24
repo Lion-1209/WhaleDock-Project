@@ -5,7 +5,7 @@
 // 浏览器/上位机经 Wi-Fi 直连设备，串口从此只是备用调试通道。
 //
 // **鉴权（v0.8.1 安全批次）**：写操作端点（config/wifi/ota/reboot/
-// display/*）须带请求头 `X-Device-Key: <6 位配对码>`；配对码由设备
+// display/*/layout）须带请求头 `X-Device-Key: <6 位配对码>`；配对码由设备
 // eFuse MAC 派生，串口 CLI `key` 查看，量产印机身标签。GET status
 // 无 key 时 SSID/分区字段脱敏。
 //
@@ -19,6 +19,10 @@
 //   POST /api/ota           {url,md5?} 启动 OTA（需 key；https 走根证书
 //        校验；带 md5 时启用完整性校验，先应答后执行）
 //   POST /api/reboot        重启设备（需 key）
+//   POST /api/layout        D3 编辑器推送布局（需 key）：body=布局 JSON（≤200KB，
+//        协议校验通过才落盘 /layout.json，返回 {ok,widgets,sources}；失败 400 且
+//        errors[] 带规则编号）。?render=1 落盘后即时入队渲染（入队即应答，
+//        约 22s 上屏；默认按协议 §8 等下一整点）
 //   POST /api/display/bw|red|yellow?off=<字节偏移>  B3 位图通道（需 key）：
 //        body=该块裸数据的 base64（≤12000 字节/块，48000B 平面分 4 块；
 //        分块规避 WebServer plain 参数对内嵌 NUL 的截断与大 body 内存峰值）
@@ -36,5 +40,6 @@ namespace webapi {
 
 void begin();  // 注册路由并启动服务（setup 调用；mDNS 待联网后在 poll 里注册）
 void poll();   // loop 调用：联网后注册 mDNS + 处理 HTTP 请求
+const char* mdnsHost();  // mDNS 主机名（eFuse MAC 派生，联网前后均可预期）
 
 }  // namespace webapi

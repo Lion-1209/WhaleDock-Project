@@ -12,6 +12,7 @@
 
 #include "app/canvas.h"
 #include "app/epaper_selftest.h"
+#include "app/layout.h"
 #include "config.h"
 #include "datapipe.h"
 #include "drivers/epaper.h"
@@ -38,6 +39,23 @@ String deviceKey() {
 }
 
 bool keyOk() { return server.header("X-Device-Key") == deviceKey(); }
+
+}  // namespace
+
+const char* mdnsHost() {
+  // mDNS 主机名 = whaledock-<eFuse MAC 低 24 位 hex>：换芯片即换名（量产每台唯一），
+  // 联网前即可给出（CLI ip 指令 / WebUI USB 探测用）
+  static char host[24];
+  static bool built = false;
+  if (!built) {
+    snprintf(host, sizeof(host), "whaledock-%06llX",
+             (unsigned long long)(ESP.getEfuseMac() & 0xFFFFFF));
+    built = true;
+  }
+  return host;
+}
+
+namespace {
 
 // ---- CORS 收敛（V4）：Origin 白名单（console 线上版 + 本地调试）----
 // 教训（b2c75eb）：响应头只在此处加一次，勿与 enableCORS 叠加
@@ -348,6 +366,56 @@ void hDisplayFlush() {
   sendOk("已受理：约 22s 完成上屏（结果看屏幕；期间可正常交互）");
 }
 
+// ---- D3 编辑器推送：POST /api/layout（协议 §10 装载形态）----
+// body = 布局 JSON（纯文本无 NUL，arg("plain") 安全）；?render=1 落盘后即时
+// 入队整帧渲染（默认按 §8 等下一整点）。渲染为 22s 重活：入队即应答。
+void hLayoutPost() {
+  if (!keyOk()) {
+    sendErr(401, "需要 X-Device-Key 请求头（设备串口 CLI 输入 key 查看）");
+    return;
+  }
+  const String& body = server.arg("plain");
+  if (body.isEmpty() || body.length() > 200 * 1024) {  // 协议附录 B：布局 <200KB
+    sendErr(400, "布局 JSON 为空或超 200KB 预算");
+    return;
+  }
+  const layout::CheckResult r = layout::check(body);
+  if (!r.ok) {
+    JsonDocument doc;
+    doc["ok"] = false;
+    doc["msg"] = "校验未通过（对应协议 §9 规则编号）";
+    JsonArray errs = doc["errors"].to<JsonArray>();
+    int start = 0;  // errors 为多行串，按行拆给编辑器逐条展示
+    while (start < (int)r.errors.length()) {
+      int nl = r.errors.indexOf('\n', start);
+      if (nl < 0) nl = r.errors.length();
+      if (nl > start) errs.add(r.errors.substring(start, nl));
+      start = nl + 1;
+    }
+    String out;
+    serializeJson(doc, out);
+    sendJson(400, out);
+    return;
+  }
+  if (!storage::writeFile("/layout.json", body)) {
+    sendErr(500, "落盘失败（文件系统）");
+    return;
+  }
+  const bool wantRender = server.arg("render") == "1";
+  const bool queued = !wantRender || worker::requestRender(worker::Render::Layout);
+  JsonDocument doc;
+  doc["ok"] = true;
+  doc["msg"] = !wantRender ? "已落盘（下一整点渲染）"
+              : queued ? "已落盘并受理渲染（约 22s 上屏）"
+                       : "已落盘，渲染队列忙碌（等整点或重试）";
+  doc["renderQueued"] = queued;
+  doc["widgets"] = r.widgetCount;
+  doc["sources"] = r.sourceCount;
+  String out;
+  serializeJson(doc, out);
+  sendJson(200, out);
+}
+
 void registerRoutes() {
   server.on("/api/status", HTTP_GET, hStatus);
   server.on("/api/config", HTTP_GET, hConfigGet);
@@ -356,6 +424,7 @@ void registerRoutes() {
   server.on("/api/pipe", HTTP_POST, hPipe);
   server.on("/api/ota", HTTP_POST, hOta);
   server.on("/api/reboot", HTTP_POST, hReboot);
+  server.on("/api/layout", HTTP_POST, hLayoutPost);
   server.on("/api/display/bw", HTTP_POST, hDisplayBw);
   server.on("/api/display/red", HTTP_POST, hDisplayRed);
   server.on("/api/display/yellow", HTTP_POST, hDisplayYellow);
@@ -363,7 +432,7 @@ void registerRoutes() {
   // 各路径的 CORS 预检
   const char* paths[] = {"/api/status", "/api/config", "/api/wifi",
                          "/api/pipe", "/api/ota", "/api/reboot",
-                         "/api/display/bw", "/api/display/red",
+                         "/api/layout", "/api/display/bw", "/api/display/red",
                          "/api/display/yellow", "/api/display/flush"};
   for (const char* p : paths) server.on(p, HTTP_OPTIONS, handleOptions);
   server.onNotFound([]() { sendErr(404, "not found（API 见 /api/*）"); });
@@ -386,14 +455,11 @@ void poll() {
   // ~1.2%，24 位降至 ~0.002%
   if (wifi::state() == wifi::State::Connected &&
       (!sMdnsStarted || sMdnsIp != WiFi.localIP())) {
-    char host[24];
-    snprintf(host, sizeof(host), "whaledock-%06llX",
-             (unsigned long long)(ESP.getEfuseMac() & 0xFFFFFF));
-    if (MDNS.begin(host)) {
+    if (MDNS.begin(mdnsHost())) {
       MDNS.addService("http", "tcp", 80);
       sMdnsIp = WiFi.localIP();
       sMdnsStarted = true;
-      Serial.printf("[Web] mDNS 已注册：http://%s.local\n", host);
+      Serial.printf("[Web] mDNS 已注册：http://%s.local\n", mdnsHost());
     }
   }
   server.handleClient();

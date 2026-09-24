@@ -104,8 +104,9 @@
       <h2>属性 <span id="prop-title" style="color:var(--dim);font-weight:400">（未选中）</span></h2>
       <div class="prop-grid" id="props"></div>
       <div class="row" id="device-row">
-        <input id="dev-addr" type="text" placeholder="设备地址 192.168.x.x（推送上屏用）" style="flex:1">
+        <input id="dev-addr" type="text" placeholder="设备地址（点「USB 探测」自动填入；或手填 IP / mDNS 域名）" style="flex:1">
         <input id="dev-key" type="password" maxlength="6" placeholder="配对码" style="width:90px">
+        <button type="button" id="btn-probe" class="flat" title="经 USB 串口向设备发 ip 指令，取回 IP 与 mDNS 域名自动填入">USB 探测</button>
         <button type="button" id="btn-push" class="primary">推送上屏</button>
       </div>
     </section>
@@ -130,8 +131,8 @@
 </script>
 <script src="js/title_art.js?v=20260924c"></script>
 <script src="js/whale_art.js?v=20260924"></script>
-<script src="js/sim.js?v=20260924b"></script>
-<script src="js/editor.js?v=20260924g"></script>
+<script src="js/sim.js?v=20260925b"></script>
+<script src="js/editor.js?v=20260925f"></script>
 
 </body>
 </html>

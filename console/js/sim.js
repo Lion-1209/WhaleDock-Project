@@ -150,6 +150,8 @@ function validate(doc) {
       f.forEach((x) => { if (!FIELDS.includes(x)) errors.push(`规则8: 字段不在白名单 '${x}'`); });
       if (w.labels && w.labels.length !== f.length)
         errors.push('规则8: labels 与 fields 数量不一致');
+      if (w.values && w.values.length !== f.length)
+        errors.push('规则8: values 与 fields 数量不一致');
       if (w.variant !== undefined && !['list', 'chips'].includes(w.variant))
         errors.push('规则7: stats.variant 仅 list|chips');
     }
@@ -280,7 +282,7 @@ function drawRepo(r, w) {
   const full = (data.repo && data.repo.fullName) || '';
   const name = full ? full.substring(full.indexOf('/') + 1) : '';
   const label = [login, name].filter(Boolean).join(' / ') || 'github';
-  drawIcon(r.x + 13, r.y + r.h / 2, 0, true);
+  drawIcon(r.x + 13, r.y + r.h / 2, 0, 'red');
   ctx.fillStyle = COL[w.color || 'black'];
   ctx.font = font(16);
   ctx.textAlign = w.align === 'right' ? 'right' : 'left';
@@ -290,23 +292,54 @@ function drawRepo(r, w) {
 
 // 标题字标：Whale-Dock 艺术体 1bpp 位图（tools/make_title.py 生成；console/js/title_art.js
 // 内嵌、与固件 resources/title_wordmark.* 同源）。满盒适配（字标自带留白，不用 image 的 16px 内缩）。
-function drawTitle(r) {
-  if (!window.TITLE_ART) {
-    ctx.fillStyle = COL.black; ctx.font = font(14);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('title_art.js 未加载', r.x + r.w / 2, r.y + r.h / 2);
+// 标题字标：默认 "Whale-Dock" = 内置 Corsiva 位图（与设备逐像素一致）；
+// 自定义文字 = 斜体字体 2x 渲染后 50% 阈值二值化（预览贴近墨水屏 1bpp 效果；
+// 设备端由编辑器导出/推送时栅格化为内联资源，见 editor.js prepareForDevice）。
+function drawTitle(r, w) {
+  const text = (w && w.text) || '';
+  const color = COL[(w && w.color) || 'black'];
+  if (!text || text === 'Whale-Dock') {
+    if (!window.TITLE_ART) {
+      ctx.fillStyle = color; ctx.font = font(14);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('title_art.js 未加载', r.x + r.w / 2, r.y + r.h / 2);
+      return;
+    }
+    const { w: bw, h: bh, data } = window.TITLE_ART;
+    const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+    const stride = Math.ceil(bw / 8);
+    const scale = Math.min(r.w / bw, r.h / bh, 4);
+    const ox = r.x + (r.w - bw * scale) / 2, oy = r.y + (r.h - bh * scale) / 2;
+    ctx.fillStyle = color;
+    for (let y = 0; y < bh; y++)
+      for (let x = 0; x < bw; x++)
+        if (bytes[y * stride + (x >> 3)] & (0x80 >> (x & 7)))
+          ctx.fillRect(ox + x * scale, oy + y * scale, Math.ceil(scale), Math.ceil(scale));
     return;
   }
-  const { w: bw, h: bh, data } = window.TITLE_ART;
-  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
-  const stride = Math.ceil(bw / 8);
-  const scale = Math.min(r.w / bw, r.h / bh, 4);
-  const ox = r.x + (r.w - bw * scale) / 2, oy = r.y + (r.h - bh * scale) / 2;
-  ctx.fillStyle = COL.black;
-  for (let y = 0; y < bh; y++)
-    for (let x = 0; x < bw; x++)
-      if (bytes[y * stride + (x >> 3)] & (0x80 >> (x & 7)))
-        ctx.fillRect(ox + x * scale, oy + y * scale, Math.ceil(scale), Math.ceil(scale));
+  // 自定义文字：离屏 2x 渲染 → 阈值二值化 → 目标区绘制
+  const cw = Math.max(40, r.w), chh = Math.max(16, r.h);
+  const off = document.createElement('canvas');
+  off.width = cw * 2; off.height = chh * 2;
+  const g = off.getContext('2d');
+  let px = Math.floor(chh * 2 * 0.9);
+  g.textBaseline = 'middle'; g.textAlign = 'center';
+  do {
+    g.font = `italic 700 ${px}px "Monotype Corsiva", Gabriola, "Segoe Script", Georgia, italic serif`;
+    if (g.measureText(text).width <= off.width - 8 || px <= 10) break;
+    px -= 2;
+  } while (true);
+  g.fillStyle = '#000';
+  g.fillText(text, off.width / 2, off.height / 2);
+  const d = g.getImageData(0, 0, off.width, off.height).data;
+  const stepX = off.width / cw, stepY = off.height / chh;
+  ctx.fillStyle = color;
+  for (let y = 0; y < chh; y++)
+    for (let x = 0; x < cw; x++) {
+      const i = (Math.floor(y * stepY) * off.width + Math.floor(x * stepX)) * 4;
+      if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 128)
+        ctx.fillRect(r.x + x, r.y + y, 1, 1);
+    }
 }
 
 // 字段聚合：stats 省略 source 时跨全部数据源取字段（v1.1；概念图四卡跨 user/repo 两源）
@@ -323,29 +356,32 @@ function drawStats(r, w) {
   if (w.variant === 'chips' && w.fields.length === 1) {  // 单字段独立卡（自适应：矮宽条单行 / 高卡上下排）
     const f = w.fields[0];
     const one = r.h < 56;
+    // 数值：values 手动覆盖优先（协议 v1.2：mockup/演示用），否则实时数据
+    const v0 = (w.values && w.values[0] != null) ? String(w.values[0]) : fmtK(d[f]);
     ctx.strokeStyle = 'rgba(28,28,28,0.35)'; ctx.lineWidth = 1;
     ctx.strokeRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
-    drawIcon(r.x + 20, r.y + r.h / 2, ICON_OF[f] ?? 0, false);
+    drawIcon(r.x + 20, r.y + r.h / 2, ICON_OF[f] ?? 0, w.color || 'black');  // 图标随 color
     if (one) {  // 矮宽条：图标 + 标签 + 数值同行
-      ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(13);
+      ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(17);
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillText(w.labels?.[0] ?? f, r.x + 38, r.y + r.h / 2);
       ctx.fillStyle = COL[w.color || 'black']; ctx.font = font(20, true, true);
       ctx.textAlign = 'right';
-      ctx.fillText(fmtK(d[f]), r.x + r.w - 12, r.y + r.h / 2);
+      ctx.fillText(v0, r.x + r.w - 12, r.y + r.h / 2);
     } else {   // 高卡：标签上、大数值下
-      ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(12);
+      ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(15);
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
       ctx.fillText(w.labels?.[0] ?? f, r.x + 38, r.y + 12);
       ctx.fillStyle = COL[w.color || 'black']; ctx.font = font(24, true, true);
       ctx.textBaseline = 'bottom';
-      ctx.fillText(fmtK(d[f]), r.x + r.w - 10, r.y + r.h - 10);
+      ctx.fillText(v0, r.x + r.w - 10, r.y + r.h - 10);
     }
     return;
   }
   if (w.variant === 'chips') {
     const rows = w.fields.map((f, i) => ({
-      label: w.labels?.[i] ?? f, v: fmtK(d[f]),
+      label: w.labels?.[i] ?? f,
+      v: (w.values && w.values[i] != null) ? String(w.values[i]) : fmtK(d[f]),
       red: i === 0 || i === w.fields.length - 1,  // 概念图：Repositories/Followers 红
     }));
     if (r.h > r.w * 0.55 && rows.length >= 3) {
@@ -355,7 +391,7 @@ function drawStats(r, w) {
         const y = r.y + i * (rh + 8);
         ctx.strokeStyle = 'rgba(28,28,28,0.35)'; ctx.lineWidth = 1;
         ctx.strokeRect(r.x + 2, y, r.w - 4, rh);
-        drawIcon(r.x + 26, y + rh / 2, i, row.red);
+        drawIcon(r.x + 26, y + rh / 2, i, row.red ? 'red' : 'black');
         ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(13);
         ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
         ctx.fillText(row.label, r.x + 48, y + rh / 2);
@@ -370,7 +406,7 @@ function drawStats(r, w) {
       const x = r.x + i * (cw + 12), y = r.y + 4, h = r.h - 8;
       ctx.strokeStyle = 'rgba(28,28,28,0.35)'; ctx.lineWidth = 1;
       ctx.strokeRect(x, y, cw, h);
-      drawIcon(x + 14, y + h / 2, i, row.red);
+      drawIcon(x + 14, y + h / 2, i, row.red ? 'red' : 'black');
       ctx.fillStyle = 'rgba(28,28,28,0.6)'; ctx.font = font(12);
       ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
       ctx.fillText(row.label, x + 42, y + h / 2 - 6);
@@ -379,7 +415,8 @@ function drawStats(r, w) {
     });
     return;
   }
-  const rows = w.fields.map((f, i) => ({ label: w.labels?.[i] ?? f, v: d[f] ?? '—' }));
+  const rows = w.fields.map((f, i) => ({ label: w.labels?.[i] ?? f,
+      v: (w.values && w.values[i] != null) ? String(w.values[i]) : (d[f] ?? '—') }));
   ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
   const lh = Math.min(44, (r.h - 20) / rows.length);
   rows.forEach((row, i) => {
@@ -401,11 +438,12 @@ const OCTI = {
   people: 'M2 5.5a3.5 3.5 0 1 1 5.898 2.549 5.508 5.508 0 0 1 3.034 4.084.75.75 0 1 1-1.482.235 4 4 0 0 0-7.9 0 .75.75 0 0 1-1.482-.236A5.507 5.507 0 0 1 3.102 8.05 3.493 3.493 0 0 1 2 5.5ZM11 4a3.001 3.001 0 0 1 2.22 5.018 5.01 5.01 0 0 1 2.56 3.012.749.749 0 0 1-.885.954.752.752 0 0 1-.549-.514 3.507 3.507 0 0 0-2.522-2.372.75.75 0 0 1-.574-.73v-.352a.75.75 0 0 1 .416-.672A1.5 1.5 0 0 0 11 5.5.75.75 0 0 1 11 4Zm-5.5-.5a2 2 0 1 0-.001 3.999A2 2 0 0 0 5.5 3.5Z',
 };
 const OCTI_PATHS = [OCTI.repo, OCTI.star, OCTI.fork, OCTI.people];
-function drawIcon(x, cy, kind, red) {
+function drawIcon(x, cy, kind, colorName) {
   ctx.save();
   ctx.translate(x - 11, cy - 11);   // 16px path 放大 1.375 → 22px，居中于 (x,cy)
   ctx.scale(1.375, 1.375);
-  ctx.fillStyle = red ? COL.red : 'rgba(28,28,28,0.75)';
+  ctx.fillStyle = colorName === 'red' ? COL.red
+    : colorName === 'yellow' ? COL.yellow : 'rgba(28,28,28,0.75)';
   ctx.fill(new Path2D(OCTI_PATHS[kind]));
   ctx.restore();
 }

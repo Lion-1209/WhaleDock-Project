@@ -286,26 +286,28 @@ void drawStats(Rect r, JsonObject w) {
     const int kind = !strcmp(f, "public_repos") ? 0 : !strcmp(f, "stars") ? 1
                    : !strcmp(f, "forks") ? 2 : 3;
     const bool one = r.h < 56;
+    const uint16_t vc = colorOf(w["color"] | "black");  // 图标与数值同色（v1.2 七期）
     d.drawRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, GxEPD_BLACK);
-    drawStatIcon(r.x + 20, r.y + r.h / 2, kind, GxEPD_BLACK);
+    drawStatIcon(r.x + 20, r.y + r.h / 2, kind, vc);
     String label = labels ? (labels[0] | String(f)) : String(f);
-    const long v = fieldOf(f);
-    const String vs = v < 0 ? "-" : fmtK(v);
-    if (one) {  // 矮宽条：图标 + 标签 + 数值同行
+    // 数值：values 手动覆盖优先（协议 v1.2：mockup/演示用），否则实时数据
+    const char* ov = w["values"][0] | (const char*)nullptr;
+    const String vs = ov ? String(ov) : [&] { const long v = fieldOf(f); return v < 0 ? String("-") : fmtK(v); }();
+    if (one) {  // 矮宽条：图标 + 标签 + 数值同行（标签 size2 与数值同级）
       d.setTextColor(GxEPD_BLACK);
-      d.setTextSize(1);
-      d.setCursor(r.x + 38, r.y + r.h / 2 - 4);
+      d.setTextSize(2);
+      d.setCursor(r.x + 38, r.y + r.h / 2 - 8);
       d.print(label);
-      d.setTextColor(colorOf(w["color"] | "black"));
+      d.setTextColor(vc);
       d.setTextSize(2);
       d.setCursor(r.x + r.w - 12 - strW(vs, 2), r.y + r.h / 2 - 8);
       d.print(vs);
     } else {    // 高卡：标签上、大数值下
       d.setTextColor(GxEPD_BLACK);
-      d.setTextSize(1);
+      d.setTextSize(2);
       d.setCursor(r.x + 38, r.y + 12);
       d.print(label);
-      d.setTextColor(colorOf(w["color"] | "black"));
+      d.setTextColor(vc);
       d.setTextSize(3);
       d.setCursor(r.x + r.w - 12 - strW(vs, 3), r.y + r.h - 28);
       d.print(vs);
@@ -327,8 +329,8 @@ void drawStats(Rect r, JsonObject w) {
       d.setTextSize(2);
       d.setCursor(r.x + 46, y + rh / 2 - 7);
       d.print(label);
-      const long v = fieldOf(fields[i]);
-      const String vs = v < 0 ? "-" : fmtK(v);
+      const char* ov2 = w["values"][i] | (const char*)nullptr;
+      const String vs = ov2 ? String(ov2) : [&] { const long v = fieldOf(fields[i]); return v < 0 ? String("-") : fmtK(v); }();
       d.setTextColor(vc);
       d.setTextSize(3);
       d.setCursor(r.x + r.w - 12 - strW(vs, 3), y + rh / 2 - 11);
@@ -351,8 +353,8 @@ void drawStats(Rect r, JsonObject w) {
     d.setTextSize(1);
     d.setCursor(x + 24, y + 8);
     d.print(label);
-    const long v = fieldOf(fields[i]);
-    const String vs = v < 0 ? "-" : fmtK(v);
+    const char* ov3 = w["values"][i] | (const char*)nullptr;
+    const String vs = ov3 ? String(ov3) : [&] { const long v = fieldOf(fields[i]); return v < 0 ? String("-") : fmtK(v); }();
     d.setTextColor(vc);
     d.setTextSize(3);
     d.setCursor(x + cw - 10 - strW(vs, 3), y + h - 30);
@@ -505,10 +507,42 @@ void drawBitmapResource(Rect r, const uint8_t* bits, int bw, int bh,
   }
 }
 
-// 标题字标（v1.2）：Whale-Dock 艺术体 1bpp 位图（tools/make_title.py 生成，
-// 与 console/js/title_art.js 同源）。等比适配居中，无专有字段。
-void drawTitle(Rect r, JsonObject) {
-  drawBitmapResource(r, title_wordmark::BITS, title_wordmark::W, title_wordmark::H);
+// 标题字标（v1.2 七期扩展）：text 默认 "Whale-Dock" = 内置 Corsiva 位图（带 color 染色）；
+// 自定义文字 = 优先编辑器栅格化的内联资源 resBW（保斜体字型，同 color 染色）；
+// 无资源回退 5x7 点阵字（不艺术但可读）。等比适配居中。
+void drawTitle(Rect r, JsonObject w, JsonDocument& doc) {
+  const uint16_t color = colorOf(w["color"] | "black");
+  const char* text = w["text"] | "";
+  if (!*text || !strcmp(text, "Whale-Dock")) {
+    drawBitmapResource(r, title_wordmark::BITS, title_wordmark::W, title_wordmark::H, color);
+    return;
+  }
+  if (w["resBW"].is<const char*>() && *(const char*)w["resBW"]) {
+    for (JsonObject res : doc["resources"].as<JsonArray>()) {
+      if (strcmp(res["id"] | "", w["resBW"] | "")) continue;
+      const int rw = res["w"] | 0, rh2 = res["h"] | 0;
+      const String b64 = res["data"] | "";
+      const int stride = (rw + 7) / 8;
+      const size_t expect = (size_t)stride * rh2;
+      if (rw <= 0 || rh2 <= 0 || !expect) break;
+      uint8_t* buf = (uint8_t*)malloc(expect);
+      size_t got = 0;
+      if (buf && mbedtls_base64_decode(buf, expect, &got,
+                                       (const uint8_t*)b64.c_str(), b64.length()) == 0 &&
+          got == expect) {
+        drawBitmapResource(r, buf, rw, rh2, color);
+        free(buf);
+        return;
+      }
+      free(buf);
+      break;
+    }
+  }
+  // 回退：点阵字（横纵缩放铺满槽位高度的 ~80%）
+  const float sc = (float)(r.h * 0.8f) / 8.0f < 1.0f ? 1.0f : (float)(r.h * 0.8f) / 8.0f;
+  const String t = text;
+  const int tw = glyphTextW(t, sc);
+  drawGlyphText(r.x + (r.w - tw) / 2, r.y + r.h / 2 - (int)(7 * sc) / 2, t, sc, sc, color);
 }
 
 // image：resources 内联 1bpp 位图。resBW（黑）必有；resR/resY 可选，各自独立
@@ -597,7 +631,7 @@ bool render(const String& layoutJson) {
     else if (type == "heatMap") drawHeatMap(r, w);
     else if (type == "text") drawText(r, w);
     else if (type == "repo") drawRepo(r, w);
-    else if (type == "title") drawTitle(r, w);
+    else if (type == "title") drawTitle(r, w, doc);
     else if (type == "ticker") drawTicker(r, w);
     else if (type == "qr") drawQr(r, w);
     else if (type == "image") drawImageRes(r, w, doc);

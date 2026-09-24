@@ -13,6 +13,7 @@
 #include "github.h"
 #include "ntp.h"
 #include "ota.h"
+#include "webapi.h"
 #include "drivers/epaper.h"
 #include "pins.h"
 #include "storage.h"
@@ -51,6 +52,7 @@ void printHelp() {
   Serial.println("  ota confirm|rollback     确认新固件 / 回滚旧版本");
   Serial.println("  probe                    位读屏控制器 REV+PON 轨迹（硬件排障）");
   Serial.println("  key                      显示设备配对码（局域网写操作 API 需要）");
+  Serial.println("  ip                       网络一览：IP + mDNS 域名（WebUI USB 探测用）");
   Serial.println("  reboot                   重启（验证凭据持久化）");
 }
 
@@ -452,6 +454,12 @@ void dispatch(char* line) {
     char key[8];
     snprintf(key, sizeof(key), "%06u", (unsigned)(ESP.getEfuseMac() % 1000000));
     Serial.printf("[配对码] %s（HTTP 写操作须带请求头 X-Device-Key: %s）\n", key, key);
+  } else if (!strcmp(line, "ip")) {
+    // 网络一览（单行 key=value，WebUI「USB 探测」解析此行自动填地址；
+    // mDNS 名由 eFuse MAC 派生，换芯片自动换名，量产每台唯一）
+    Serial.printf("[IP] state=%s ip=%s mdns=%s.local\n",
+                  wifi::state() == wifi::State::Connected ? "online" : "offline",
+                  wifi::ip(), webapi::mdnsHost());
   } else if (!strcmp(line, "pipe")) {
     if (!worker::requestPipe()) Serial.println("[CLI] 工作队列忙碌，稍后再试");
   } else if (!strcmp(line, "ota")) {

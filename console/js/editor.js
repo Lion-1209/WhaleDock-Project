@@ -283,6 +283,12 @@ function buildProps() {
     add('对齐', alignSel(w.align));
     add('颜色', colorSel(w.color));
   } else if (w.type === 'title') {
+    add('文本', text(w.text || '', (v) => {
+      if (v.trim()) w.text = v.trim();
+      else delete w.text;
+      afterEdit();
+    }, '留空 = Whale-Dock（内置字标）'));
+    add('颜色', colorSel(w.color));
     add('锁宽高比', chk(ratioLock.has(w), (v) => {
       v ? ratioLock.add(w) : ratioLock.delete(w);
       syncMoveable();
@@ -294,6 +300,12 @@ function buildProps() {
       w.labels = v.split(',').map((s) => s.trim()).filter(Boolean);
       afterEdit();
     }, '逗号分隔'));
+    add('数值', text((w.values || []).join(', '), (v) => {
+      const vals = v.split(',').map((s) => s.trim());
+      if (vals.some(Boolean)) w.values = vals;
+      else delete w.values;
+      afterEdit();
+    }, '留空 = 实时 GitHub 数据'));
     add('颜色', colorSel(w.color));
   } else if (w.type === 'barChart') {
     add('标题', text(w.title || '', (v) => { w.title = v; afterEdit(); }));
@@ -362,33 +374,157 @@ $e('btn-del').addEventListener('click', () => {
 
 $e('btn-export').addEventListener('click', () => {
   if (!doc) return;
-  const v = validate(doc);  // 与固件同源的校验器
+  const dev = prepareForDevice(doc);   // 自定义标题文字 → 设备端内联位图资源
+  const v = validate(dev);  // 与固件同源的校验器
   if (v.errors.length) {
     msg('校验未通过：\n' + v.errors.join('\n'));
     return;
   }
-  const json = JSON.stringify(doc, null, 2);
+  const json = JSON.stringify(dev, null, 2);
   const blob = new Blob([json], { type: 'application/json' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'layout.json';
   a.click();
   URL.revokeObjectURL(a.href);
-  msg(`校验通过 ✓ 已下载 layout.json（${json.length}B）`);
+  msg(`校验通过 ✓ 已下载 layout.json（${json.length}B${dev.resources.length ? `，含 ${dev.resources.length} 内联资源` : ''}）`);
 });
 
-// ---- 推送上屏 ----
+// ---- 设备交付准备：自定义标题文字 → 栅格化 1bpp 内联资源 ----
+// 预览端用斜体字体实时渲染，设备端没有艺术字体——导出/推送前把自定义文字
+// 按标题槽 2x 渲染、50% 阈值二值化、MSB-first 打包为资源，title.resBW 指向之
+// （默认 "Whale-Dock" 走固件内置 Corsiva 位图，无需资源）。
+function rasterizeTitle(w) {
+  const sr = w.slotRect || rectOf(w);
+  const cw = Math.max(40, sr.w) * 2, ch = Math.max(16, sr.h) * 2;
+  const c = document.createElement('canvas');
+  c.width = cw; c.height = ch;
+  const g = c.getContext('2d');
+  let px = Math.floor(ch * 0.9);
+  g.textBaseline = 'middle'; g.textAlign = 'center';
+  for (;;) {
+    g.font = `italic 700 ${px}px "Monotype Corsiva", Gabriola, "Segoe Script", Georgia, italic serif`;
+    if (g.measureText(w.text).width <= cw - 8 || px <= 10) break;
+    px -= 2;
+  }
+  g.fillStyle = '#000';
+  g.fillText(w.text, cw / 2, ch / 2);
+  const w1 = Math.floor(cw / 2), h1 = Math.floor(ch / 2);
+  const d = g.getImageData(0, 0, cw, ch).data;
+  const stride = Math.ceil(w1 / 8);
+  const bytes = new Uint8Array(stride * h1);
+  for (let y = 0; y < h1; y++)
+    for (let x = 0; x < w1; x++) {
+      const i = (Math.floor(y * 2) * cw + Math.floor(x * 2)) * 4;
+      if ((d[i] + d[i + 1] + d[i + 2]) / 3 < 128)
+        bytes[y * stride + (x >> 3)] |= 0x80 >> (x & 7);
+    }
+  return { id: null, w: w1, h: h1, data: b64Of(bytes) };
+}
+
+function prepareForDevice(src) {
+  const out = JSON.parse(JSON.stringify(src));
+  out.resources = (out.resources || []).filter((r) => !/^title_raster/.test(r.id));
+  let n = 0;
+  for (const w of out.layout.widgets) {
+    if (w.type === 'title' && w.text && w.text !== 'Whale-Dock') {
+      const res = rasterizeTitle(w);
+      res.id = `title_raster_${++n}`;
+      out.resources.push(res);
+      w.resBW = res.id;
+    } else if (w.type === 'title') {
+      delete w.resBW;  // 默认文字走固件内置位图
+    }
+  }
+  return out;
+}
+
+// ---- USB 探测（Web Serial 连设备发 CLI ip+key 指令，地址与配对码一键填齐）----
+// 设备回显：[IP] state=online ip=192.168.x.x mdns=whaledock-XXXXXX.local
+//          [配对码] 123456（HTTP 写操作须带请求头 X-Device-Key: 123456）
+// 换芯片 = 换 MAC = 自动换 mDNS 名与配对码，页面不写死任何设备信息。
+async function probeDevice() {
+  if (!('serial' in navigator)) {
+    msg('此浏览器不支持 Web Serial（需 Chrome/Edge，且页面须 localhost 或 HTTPS）');
+    return;
+  }
+  let port;
+  try {
+    // 先按乐鑫厂商 ID 过滤（VID 0x303A = ESP32 原生 USB）——选择器只列设备的
+    // 原生串口，避开同名"USB 串行设备"的桥接口（CLI 只在原生口应答）；
+    // 无匹配端口时退回不过滤（老接线/仅桥接口场景）
+    try {
+      port = await navigator.serial.requestPort({ filters: [{ usbVendorId: 0x303A }] });
+    } catch (e) {
+      port = await navigator.serial.requestPort();
+    }
+    await port.open({ baudRate: 115200 });
+  } catch (e) {
+    msg('未选择串口或打开失败：' + e.message);
+    return;
+  }
+  msg('已连接，查询 IP/mDNS/配对码…');
+  try {
+    const writer = port.writable.getWriter();
+    await writer.write(new TextEncoder().encode('ip\r\nkey\r\n'));
+    writer.releaseLock();
+    const reader = port.readable.getReader();
+    const timer = setTimeout(() => reader.cancel().catch(() => {}), 4000);
+    let buf = '';
+    const dec = new TextDecoder();
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value);
+      if (buf.includes('mdns=') && buf.includes('[配对码]')) break;
+    }
+    clearTimeout(timer);
+    reader.releaseLock().catch(() => {});
+    await port.close();
+    const m = buf.match(/\[IP\]\s*state=(\w+)\s+ip=(\S+)\s+mdns=(\S+)/);
+    const k = buf.match(/\[配对码\]\s*(\d{6})/);
+    if (k) $e('dev-key').value = k[1];
+    if (m && m[1] === 'online') {
+      $e('dev-addr').value = m[3];
+      msg(`✓ 设备在线：${m[3]}（IP ${m[2]}）${k ? ' 与配对码' : ''}已自动填入，可直接「推送上屏」`);
+    } else if (m) {
+      msg(`设备未联网（state=${m[1]}，IP ${m[2]}），请先在工作台配网${k ? '；配对码已填入' : ''}`);
+    } else {
+      msg('未收到 [IP] 应答——选的是鲸屿设备串口吗？回显：' + buf.slice(0, 60));
+    }
+  } catch (e) {
+    msg('探测失败：' + e.message + '（若串口被监视器占用请先断开）');
+    try { await port.close(); } catch (_) { /* 已关闭 */ }
+  }
+}
+$e('btn-probe').addEventListener('click', probeDevice);
+
+// ---- 推送上屏（固件 POST /api/layout：校验 → 落盘 → ?render=1 即时渲染）----
 $e('btn-push').addEventListener('click', async () => {
   const addr = $e('dev-addr').value.trim();
   const key = $e('dev-key').value.trim();
   if (!addr) { msg('请填设备地址'); return; }
   if (!doc) return;
   const v = validate(doc);
-  if (v.errors.length) { msg('校验未通过，不能上屏'); return; }
-
-  // TODO：当前设备侧尚无「布局 JSON 上屏」端点（Widget 渲染引擎已具备，差一个
-  // /api/layout 接收端点），先用导出文件 + CLI layout write 流程过渡
-  msg('推送接口待固件侧 /api/layout 落地（今日新增），当前请用「导出 JSON」+ console 工作台粘贴');
+  if (v.errors.length) { msg('校验未通过，不能上屏：\n' + v.errors.join('\n')); return; }
+  const json = JSON.stringify(prepareForDevice(doc));  // 自定义标题 → 内联位图资源
+  msg(`推送中（${(json.length / 1024).toFixed(1)}KB）…`);
+  try {
+    const res = await fetch(`http://${addr}/api/layout?render=1`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Device-Key': key },
+      body: json,
+    });
+    const out = await res.json();
+    if (out.ok) {
+      msg(`✓ ${out.msg}（widgets ${out.widgets} · 数据源 ${out.sources}）`);
+    } else {
+      msg('✗ 设备校验未通过：\n' + (out.errors || [out.msg || res.status]).join('\n'));
+    }
+  } catch (e) {
+    msg('推送失败：' + e.message +
+        '（检查设备地址/同一局域网/配对码；线上版页面推局域网设备需浏览器允许本地网络访问）');
+  }
 });
 
 // ---- 图片导入：文件 → 缩放（守协议附录 B 单资源 16KB 预算）→ Bayer 抖动/Otsu
