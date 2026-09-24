@@ -7,7 +7,7 @@
 // ============================================================
 
 #include <ArduinoJson.h>
-#include <String>
+#include <Arduino.h>  // String
 
 namespace layout {
 
