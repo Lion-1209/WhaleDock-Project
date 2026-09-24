@@ -6,6 +6,7 @@
 #include "ntp.h"
 #include "storage.h"
 #include "wifi.h"
+#include "worker.h"
 
 namespace datapipe {
 
@@ -14,7 +15,8 @@ namespace {
 bool sBusy = false;
 
 void onHourly() {
-  runOnce("整点");
+  // §9：回调上下文只入队，拉取在 worker 任务执行（loopTask 不再阻塞数秒）
+  worker::requestPipe();
 }
 
 }  // namespace
@@ -28,6 +30,13 @@ bool busy() {
 }
 
 void runOnce(const char* trigger) {
+  // 有界等网 20s：紧邻屏刷新的调用（射频静默后 Wi-Fi 重连退避中）能自愈
+  if (wifi::state() != wifi::State::Connected) {
+    Serial.printf("[流水] %s触发：Wi-Fi 未连接，等待重连（最多 20s）…\n", trigger);
+    const uint32_t tWait = millis();
+    while (wifi::state() != wifi::State::Connected && millis() - tWait < 20000)
+      delay(500);
+  }
   if (wifi::state() != wifi::State::Connected) {
     Serial.printf("[流水] %s触发：Wi-Fi 未连接，跳过本轮（下个整点自动重试）\n",
                   trigger);
@@ -81,6 +90,7 @@ void runOnce(const char* trigger) {
 
   Serial.printf("[流水] 完成，耗时 %.1fs（成功项缓存已更新）\n",
                 (millis() - t0) / 1000.0);
+  worker::requestRenderFromWorker(worker::Render::Layout);  // 闭环：拉数→缓存→上屏
   sBusy = false;
 }
 

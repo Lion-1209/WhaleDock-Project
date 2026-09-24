@@ -1,10 +1,12 @@
 #include "cli.h"
 
 #include <Arduino.h>
+#include <ArduinoJson.h>
 #include <WiFi.h>
 
 #include "app/assets/concept_demo.h"
 #include "app/epaper_selftest.h"
+#include "app/widgets.h"
 #include "app/layout.h"
 #include "config.h"
 #include "datapipe.h"
@@ -14,6 +16,7 @@
 #include "drivers/epaper.h"
 #include "pins.h"
 #include "storage.h"
+#include "worker.h"
 #include "wifi.h"
 
 #include <SPI.h>
@@ -40,7 +43,7 @@ void printHelp() {
   Serial.println("  config show|user <l>|repo <o/r>|token <t>  数据源配置（- 清除对应项）");
   Serial.println("  fs ls [dir]|cat <f>|rm <f>|format   文件系统调试");
   Serial.println("  layout sample|check     写入/校验示例显示布局（协议 v1，见 docs/显示协议-v1.md）");
-  Serial.println("  demo                     概念图 v2 示例帧上屏（模拟器提取三平面，全刷约 22s）");
+  Serial.println("  demo                     渲染 /layout.json 上屏（C2 引擎；无文件回退示例帧）");
   Serial.println("  screen test              四色诊断图上屏（B2 管线验证图，全刷约 22s）");
   Serial.println("  pipe                     立即执行一轮数据流水（同整点动作）");
   Serial.println("  ota status               固件版本/分区状态");
@@ -367,6 +370,42 @@ void cmdProbe() {
   SPI.begin(EPD_CLK, -1, EPD_DIN, -1);
 }
 
+// 渲染布局到三平面（不刷屏）并输出 ASCII 预览：调试 Widget 排版的"眼睛"
+void cmdPreview(char* rest) {
+  const String json = storage::exists("/layout.json")
+                          ? storage::readFile("/layout.json") : String("");
+  if (!json.length()) {
+    Serial.println("[预览] 无 /layout.json");
+    return;
+  }
+  {
+    JsonDocument probe;
+    const DeserializationError e = deserializeJson(probe, json);
+    Serial.printf("[预览] JSON %uB 解析：%s（首 60 字：%.*s）\n",
+                  (unsigned)json.length(), e ? e.c_str() : "OK", 60, json.c_str());
+    if (e) return;
+  }
+  if (!widgets::render(json)) {
+    Serial.println("[预览] 渲染失败");
+    return;
+  }
+  auto& c = canvas::get();
+  Serial.println("[预览] ASCII（#黑 R红 Y黄 .白）");
+  const int step = *rest ? atoi(rest) : 8;
+  for (int y = 0; y < 480; y += step) {
+    String row;
+    for (int x = 0; x < 800; x += step) {
+      const int bit = 0x80 >> (x & 7);
+      const int idx = y * 100 + (x >> 3);
+      if (c.plane(canvas::PL_RED)[idx] & bit) row += 'R';
+      else if (c.plane(canvas::PL_YELLOW)[idx] & bit) row += 'Y';
+      else if (c.plane(canvas::PL_BW)[idx] & bit) row += '#';
+      else row += '.';
+    }
+    Serial.println(row);
+  }
+}
+
 void dispatch(char* line) {
   if (!*line) return;
   char* sp = strchr(line, ' ');
@@ -389,7 +428,8 @@ void dispatch(char* line) {
     cmdLayout(rest);
   } else if (!strcmp(line, "demo")) {
     if (SCREEN_ATTACHED) {
-      concept_demo::show();
+      if (!worker::requestRender(worker::Render::Layout))
+        Serial.println("[CLI] 工作队列忙碌，稍后再试");
     } else {
       Serial.println("[CLI] SCREEN_ATTACHED=false，屏未启用");
     }
@@ -397,12 +437,15 @@ void dispatch(char* line) {
     if (!SCREEN_ATTACHED) {
       Serial.println("[CLI] SCREEN_ATTACHED=false，屏未启用");
     } else if (!strcmp(rest, "test")) {
-      epaper_selftest::run();
+      if (!worker::requestRender(worker::Render::Test))
+        Serial.println("[CLI] 工作队列忙碌，稍后再试");
     } else {
       Serial.println("[CLI] 格式：screen test");
     }
   } else if (!strcmp(line, "probe")) {
     cmdProbe();
+  } else if (!strcmp(line, "preview")) {
+    cmdPreview(rest);
   } else if (!strcmp(line, "key")) {
     // 设备配对码：同网段调用写操作 API（wifi/ota/reboot/display/config）须带
     // X-Device-Key 头；码由 eFuse MAC 派生，量产时印机身标签
@@ -410,7 +453,7 @@ void dispatch(char* line) {
     snprintf(key, sizeof(key), "%06u", (unsigned)(ESP.getEfuseMac() % 1000000));
     Serial.printf("[配对码] %s（HTTP 写操作须带请求头 X-Device-Key: %s）\n", key, key);
   } else if (!strcmp(line, "pipe")) {
-    datapipe::runOnce("手动");
+    if (!worker::requestPipe()) Serial.println("[CLI] 工作队列忙碌，稍后再试");
   } else if (!strcmp(line, "ota")) {
     if (!strcmp(rest, "status") || !*rest) {
       ota::printStatus();

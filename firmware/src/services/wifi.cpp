@@ -73,6 +73,10 @@ void begin() {
   startConnect();
 }
 
+void kickReconnect() {
+  if (sState != State::Connected && !sSsid.isEmpty()) startConnect();
+}
+
 void poll() {
   if (sGotIp) {
     sGotIp = false;

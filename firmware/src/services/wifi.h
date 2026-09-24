@@ -13,7 +13,8 @@ namespace wifi {
 
 enum class State { Disabled, Connecting, Connected, RetryWait };
 
-void begin();  // 装载事件钩子；有已存凭据则自动开始连接
+void begin();
+void kickReconnect();  // 射频恢复后立即重连（不等退避）  // 装载事件钩子；有已存凭据则自动开始连接
 void poll();   // loop 调用：消化事件标志 + 超时/重连调度（非阻塞）
 
 void connect(const char* ssid, const char* pass);  // 保存凭据到 NVS 并连接

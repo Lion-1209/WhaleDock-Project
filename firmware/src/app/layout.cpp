@@ -5,17 +5,115 @@
 namespace layout {
 
 const char* sampleJson() {
-  // 概念图 v2（鲸屿形态）屏幕版式复刻（与模拟器 SAMPLE 一致；glyphs 置空：结构校验不展开字库）
-  return R"({"version":1,"dataSources":[
-    {"id":"gh","type":"github.user","params":{"user":"datawhalechina"}},
-    {"id":"repo","type":"github.repo","params":{"owner":"datawhalechina","repo":"leeml-notes"}}],
-  "layout":{"resolution":[800,480],"widgets":[
-    {"slot":"tl","slotRect":{"x":12,"y":16,"w":300,"h":148},"type":"pet","res":"whale_pixel"},
-    {"slot":"tr","slotRect":{"x":330,"y":16,"w":458,"h":148},"type":"clock","calendar":true,"align":"right"},
-    {"slot":"bl","slotRect":{"x":12,"y":180,"w":776,"h":170},"type":"heatMap","source":"repo","title":"GitHub Contribution"},
-    {"slot":"br","slotRect":{"x":236,"y":364,"w":552,"h":72},"type":"stats","variant":"chips",
-     "fields":["public_repos","stars","forks","followers"],"labels":["Repositories","Stars","Forks","Followers"]},
-    {"slot":"ticker","slotRect":{"x":424,"y":444,"w":364,"h":24},"type":"text","size":"s","align":"right","text":"Keep coding. Keep shipping."}]}})";
+  // 概念图 v2（鲸屿形态）复刻版式 —— 与模拟器 SAMPLE 同源（含 whale_logo 220x192 内联资源；
+  // glyphs 字段结构校验不展开）。版式：左半屏大鲸鱼 image / 右上时钟+整月历 / 中层左热力图+右统计竖卡 / 右下标语
+  return R"LAY({
+  "version": 1,
+  "dataSources": [
+    {
+      "id": "gh",
+      "type": "github.user",
+      "params": {
+        "user": "datawhalechina"
+      }
+    },
+    {
+      "id": "repo",
+      "type": "github.repo",
+      "params": {
+        "owner": "datawhalechina",
+        "repo": "leeml-notes"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "id": "whale_logo",
+      "w": 220,
+      "h": 192,
+      "data": "AAAAAAAAAAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAPgAAP///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAP/AAH////AAAAAAAAAAAAAAAAAAAAAAAAAAAAH/8AB////gAAAAAAAAAAAAAAAAAAAAAAAAAAAB//gAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/4AP///4AAAAAAAAAAAAAAAAAAAAAAAAAAAAH//AD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAB//4A///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/+AP///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//gH///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/8B///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/Af//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfwH//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8B//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAf/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwH/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcB/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQH4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH//////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////gAAAAAAAAAAAAAAAAAAAAAAAAAB//////////+AAAAAAAAAAAAAAAAAAAAAAAAAB///////////4AAAAAAAAAAAAAAAAAAAAAAAAB////////////gAAAAAAAAAAAAAAAAAAAAAAAB////////////+AAAAAAAAAAAAAAAAAAAAAAAB/////////////wAAAAAAAAAAAAAAAAAAAAAAB//////////////AAAAAAAAAAAAAAAAAAAAAAA//////////////4AAAAAAAAAAAAAAAAAAAAAA///////////////gAAAAAAAAAAAAAAAAAAAAAf//////////////8AAAAAAAAAAAAAAAAAAAAAf///////////////gAAAAAAAAAAAAAAAAAAAAP///////////////8AAAAAAAAAAAAAAAAAAAAH////////////////gAAAAAAAAAAAAAAAAAAAH////////////////8AAAAAAAAAAAAAAAAAAAD/////////////////gAAAAAAAAAAAAAAAAAAB/////////////////8AAAAAAAAAAAAAAAAAAA//////////////////gAAAAAAAAAAAAAAAAAAf/////////////////8AAAAAAAAAAAAAAAAAAP//////////////////gAAAAAAAAAAAAAAAAAH//////////////////8AAAAAAAAAAAAAAAAAD///////////////////gAAAAAAAAAAAAAAAAB///////////////////8AAAAAAAAAAAAAAAAA////////////////////AAAAAAAAAAAAAAAAAf///////////////////4AAAAAAAAAAAAAAAAH////////////////////AAAAAAAAAAAAAAAAD////////////////////wAAAAAAAAAAAAAAAB////////////////////+AAAAAAAAAAAAAAAA/////////////////////wAAAAAAAAAAAAAAAP////////////////////8AAAAAAAAAAAAAAAH/////////////////////gAAAAAAAAAAAAAAD/////////////////////4AAAAAAAAAAAAAAB//////////////////////AAAAAAAAAAAAAAAf/////////////////////4AAAAAAAAAAAAAAP/////////////////////+AAAAAAAAAAAAAAD//////////////////////wAAAAAAAAAAAAAB//////////////////////8AAAAAAAAAAAAAA///////////////////////AAAAAAAAAAAAAAP//////////////////////4AAAAAAAAAAAAAH//////////////////////+AAAAAAAAAAAAAB///////////////////////wAAAAAAAAAAAAA///////////////////////8AAAAAAAAAAAAAf///////////////////////gAAAAAAAAAAAAH///////////////////////4AAAAAACAAAAAD///////////////////////+AAAAAABwAAAAA////////////////////////wAAAAAAeAAAAAf///////////////////////8AAAAAAPwAAAAH////////////////////////AAAAAAH+AAAAD////////////////////////4AAAAAB/wAAAA////////////////////////+AAAAAA/+AAAAf////////////////////////gAAAAAP/gAAAH////////////////////////4AAAAAD/8AAAD/////////////////////////AAAAAB//AAAA/////////////////////////wAAAAAf/wAAAP////////////////////////8AAAAAH/+AAAH/////////////////////////AAAAAD//gAAB/////////////////////////wAAAAA//4AAA/////////////////////////+AAAAAP/+AAAP/////////////////////////gAAAAD//wAAD/////////////////////////4AAAAA//8AAB/////////////////////////+AAAAAP//AAAf/////////////////////////gAAAAH//wAAH/////////////////////////4AAAAB//8AAD//////////////////////////AAAAAf//AAA//////////////////////////wAAAAH//wAAP/////////////////////////8AAAAB//8AAD//////////////////////////AAAAAf//AAB//////////////////////////wAAAAH//wAAf/////////////////////////8AAAAB//8AAH//////////////////////////AAB+Af//AAB//////////////////////////wA//////wAA//////////////////////////8B//////8AAP//////////////////////////B///////AAD//////////////////////////w///////wAA//////////////////////////8P//////8AAf//////////////////////////B///////gAP//////////////////////////wP//////8AH//////////////////////////8B///////wD//////////////////j////////AP///////D//////////////////gP///////wB//////////////////////////wB///////8AP/////////////////////////4AP///////AB/////////////////////////8AB///////wAP/////////////////////////AAf//////8AA/////////////////////////wAH///////AAB////////////////////////8AB///////gAAAfAD/////////////////////AAf//////4AAAAAAf////////////////////wB3//////+AAAAAAD////////////////////+Af///////gAAAAAAf////////////////////wH///////wAAAAAAD////////////////////+A///////8AAAAAAAf/////////////////////////////AAAAAAAH/////////////////////////////wAAAAAAA/////////////////////////////4AAAAAAAH////////////////////////////+AAAAAAAA/////////////////////////////gAAAAAAAH////////////////////////////wAAAAAAAA////////////////////////////8AAAAAAAAH///////////////////////////+AAAAAAAAA////////////////////////////gAAAAAAAAH///////////////////////////wAAAAAAAAA/////////////////////////3/8AAAAAAAAAH////////////////////////B/+AAAAAAAAAA///////////////////////+A//gAAAAAAAAAH//////////////////////8AP/wAAAAAAAAAA//////////////////////wAH/4AAAAAAAAAAH/////////////////////AAD/+AAAAAAAAAAA////////////////////+AAB//AAAAAAAAAAAH///////////////////+AAAf/gAAAAAAAAAAA////////////////////AAAP/4AAAAAAAAAAAH///////////////////gAAH/8AAAAAAAAAAAA///////////////////gAAD/+AAAAAAAAAAAAH//////////////////wAAB//AAAAAAAAAAAAA//////////////////4AAA//wAAAAAAAAAAAAD/////////////////8AAAf/4AAAAAAAAAAAAAf////////////////+AAAP/8AAAAAAAAAAAAAD////////////////+AAAP/+AAAAAAAAAAAAAAf////////////////AAAH//AAAAAAAAAAAAAAD////////////////AAAD//gAAAAAAAAAAAAAAP///////////////gAAD//wAAAAAAAAAAAAAAB///////////////gAAB//4AAAAAAAAAAAAAAAP//////////////gAAA//4AAAAAAAAAAAAAAAB//////////////gAAA//8AAAAAAAAAAAAAAAAH/////////////gAAA//+AAAAAAAAAAAAAAAAA/////////////gAAAf//AAAAAAAAAAAAAAAAAH////////////gAAAf//AAAAAAAAAAAAAAAAAAf///////////AAAAf//gAAAAAAAAAAAAAAAAAD//////////+AAAAf//wAAAAAAAAAAAAAAAAAAP/////////8AAAAf//wAAAAAAAAAAAAAAAAAAB/////////4AAAAf//4AAAAAAAAAAAAAAAAAAAH////////AAAAA///4AAAAAAAAAAAAAAAAAAAA///////8AAAAB///8AAAAAAAAAAAAAAAAAAAAD//////AAAAAD///8AAAAAAAAAAAAAAAAAAAAAP///+AAAAAAP///8AAAAAAAAAAAAAAAAAAAAAA////wAAAAB////8AAAAAAAAAAAAAAAAAAAAAAD////8AAAf////8AAAAAAAAAAAAAAAAAAAAAAAP////////////8AAAAAAAAAAAAAAAAAAAAAAAA////////////8AAAAAAAAAAAAAAAAAAAAAAAAB///////////8AAAAAAAAAAAAAAAAAAAAAAAAAH//////////4AAAAAAAAAAAAAAAAAAAAAAAAAAP/////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAA"
+    }
+  ],
+  "layout": {
+    "resolution": [
+      800,
+      480
+    ],
+    "widgets": [
+      {
+        "slot": "tl",
+        "slotRect": {
+          "x": 12,
+          "y": 14,
+          "w": 330,
+          "h": 264
+        },
+        "type": "image",
+        "resBW": "whale_logo"
+      },
+      {
+        "slot": "tr",
+        "slotRect": {
+          "x": 354,
+          "y": 14,
+          "w": 426,
+          "h": 264
+        },
+        "type": "clock",
+        "calendar": true,
+        "align": "right"
+      },
+      {
+        "slot": "bl",
+        "slotRect": {
+          "x": 12,
+          "y": 282,
+          "w": 500,
+          "h": 160
+        },
+        "type": "heatMap",
+        "source": "repo",
+        "title": "GitHub Contribution"
+      },
+      {
+        "slot": "br",
+        "slotRect": {
+          "x": 524,
+          "y": 282,
+          "w": 264,
+          "h": 160
+        },
+        "type": "stats",
+        "variant": "chips",
+        "fields": [
+          "public_repos",
+          "stars",
+          "forks",
+          "followers"
+        ],
+        "labels": [
+          "Repositories",
+          "Stars",
+          "Forks",
+          "Followers"
+        ]
+      },
+      {
+        "slot": "ticker",
+        "slotRect": {
+          "x": 500,
+          "y": 448,
+          "w": 288,
+          "h": 20
+        },
+        "type": "text",
+        "size": "s",
+        "align": "right",
+        "text": "Keep coding. Keep shipping."
+      }
+    ]
+  }
+})LAY";
 }
 
 namespace {

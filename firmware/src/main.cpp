@@ -20,6 +20,7 @@
 #include "services/ota.h"
 #include "services/storage.h"
 #include "services/webapi.h"
+#include "services/worker.h"
 #include "services/wifi.h"
 
 static OnboardLed onboardLed;
@@ -38,14 +39,15 @@ void setup() {
   ota::begin();          // OTA 分区状态检查 + 待验证固件自动确认
   datapipe::begin();     // 挂接整点回调：到点按设备配置自动拉取数据源
   webapi::begin();       // 设备 HTTP API（局域网通道，mDNS 联网后注册）
+  worker::begin();       // 重活工作队列（渲染/流水/OTA 出 loopTask）
 
   if (!SCREEN_ATTACHED) {
     Serial.println("[屏] 未接屏（SCREEN_ATTACHED=false），跳过点屏，进入呼吸心跳");
     return;
   }
-  // 开机画面 = 概念图 v2 示例帧（模拟器提取三平面固化资产；C2 引擎落地后换实时渲染）。
-  // 四色诊断图（B2 验证用）改走 CLI：screen test
-  concept_demo::show();
+  // 开机画面入队（worker 任务渲染，CLI/HTTP 上电即在线，不再被 22s 全刷阻塞）；
+  // 渲染 /layout.json（C2 引擎）；无文件时 worker 内部回退示例帧
+  worker::requestRender(worker::Render::Layout);
 }
 
 void loop() {

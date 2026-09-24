@@ -5,6 +5,7 @@
 #include <esp_wifi.h>
 
 #include "drivers/epaper.h"
+#include "../services/wifi.h"
 
 namespace canvas {
 
@@ -119,7 +120,8 @@ bool flush() {
   epaper::powerOff();  // 断驱动电压、保持唤醒态（DSLP 深睡后唤不醒，v0.8.0 实测教训）
   if (wifiWasOn) {
     esp_wifi_start();
-    Serial.println("[屏] 射频已恢复，Wi-Fi 自动重连中");
+    wifi::kickReconnect();  // 不等 15s 退避，立即重连
+    Serial.println("[屏] 射频已恢复，Wi-Fi 重连已触发");
   }
   Serial.printf("[屏] 全刷完成 %.1fs（打包推送 %ums + 刷新等待 %ums）\n",
                 (millis() - t0) / 1000.0, (unsigned)tPack, (unsigned)(millis() - t1));

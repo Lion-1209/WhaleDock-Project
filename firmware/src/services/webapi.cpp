@@ -18,6 +18,7 @@
 #include "ntp.h"
 #include "ota.h"
 #include "storage.h"
+#include "worker.h"
 #include "wifi.h"
 
 namespace webapi {
@@ -210,8 +211,12 @@ void hWifiPost() {
 }
 
 void hPipe() {
-  datapipe::runOnce("网页");  // 阻塞至完成（数秒），结果见串口/缓存
-  sendOk("流水已执行（结果见设备日志/缓存）");
+  // 入队即应答（拉取在 worker 任务执行，结果见设备日志/缓存/屏）
+  if (!worker::requestPipe()) {
+    sendErr(409, "工作队列忙碌，稍后再试");
+    return;
+  }
+  sendOk("已受理：流水执行中（结果看设备日志）");
 }
 
 void hOta() {
@@ -230,10 +235,11 @@ void hOta() {
     return;
   }
   const String md5 = doc["md5"] | "";  // 可选：Release 附件 .md5（强烈建议）
-  sendOk("升级启动：下载写入后设备将重启（期间 API 短暂无响应）");
-  server.handleClient();  // 尽量把应答送出去
-  delay(300);
-  ota::fromUrl(url.c_str(), md5.isEmpty() ? nullptr : md5.c_str());
+  if (!worker::requestOta(url.c_str(), md5.isEmpty() ? nullptr : md5.c_str())) {
+    sendErr(409, "工作队列忙碌，稍后再试");
+    return;
+  }
+  sendOk("升级启动：下载写入后设备将重启");
 }
 
 void hReboot() {
@@ -325,17 +331,21 @@ void hDisplayFlush() {
     sendErr(503, "PSRAM 三平面分配失败");
     return;
   }
+  if (worker::busy()) {
+    sendErr(409, "屏刷新进行中，稍后再推（防止推屏任务与位图写入竞争平面）");
+    return;
+  }
   for (uint8_t p = 0; p < 3; p++)  // 协议 §7：省略的平面 = 全白
     if (!(sPlaneSeen & (1 << p))) memset(canvas::get().plane(p), 0, canvas::PLANE_BYTES);
   sPlaneSeen = 0;
   // 先应答后执行：22s 阻塞期间 TCP 会被断（errno 113 实测），客户端拿到
   // 的是连接中断而非结果——应答改为"已受理"，刷新结果看设备日志/屏
-  sendOk("已受理：约 22s 完成上屏（期间设备无响应，勿重复推送）");
-  server.handleClient();  // 把应答真正送出去
-  delay(200);
-  Serial.println("[Web] 位图通道 flush：整帧上屏…");
-  epaper::init();  // RST 脉冲唤醒/复位面板（幂等）
-  canvas::flush();  // 内部含射频静默、BUSY 保险丝与全刷计时
+  // 入队即应答：worker 任务执行 flush（loopTask 不再阻塞，HTTP/CLI 全程在线）
+  if (!worker::requestRender(worker::Render::Bitmap)) {
+    sendErr(409, "工作队列忙碌，稍后再试");
+    return;
+  }
+  sendOk("已受理：约 22s 完成上屏（结果看屏幕；期间可正常交互）");
 }
 
 void registerRoutes() {
