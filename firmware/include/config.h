@@ -17,7 +17,7 @@
 // 0.8.1：安全加固批次——设备配对码（写操作鉴权）+ GitHub/OTA 根证书校验 +
 // 0.9.0：C2 Widget 引擎 + V5 任务拆分——布局实时渲染上屏 + 重活队列
 //        OTA MD5 完整性校验 + token 迁 NVS + CORS 白名单 + 输入/路径校验
-constexpr const char* FW_VERSION = "0.9.0";
+constexpr const char* FW_VERSION = "0.10.0";
 
 // 屏到货（2026-09-22，DFG0750RYS677F71HP-D1，经 EVK011 转接板）= true：开机跑 B1 点屏自检
 constexpr bool SCREEN_ATTACHED = true;

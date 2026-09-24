@@ -5,115 +5,29 @@
 namespace layout {
 
 const char* sampleJson() {
-  // 概念图 v2（鲸屿形态）复刻版式 —— 与模拟器 SAMPLE 同源（含 whale_logo 220x192 内联资源；
-  // glyphs 字段结构校验不展开）。版式：左半屏大鲸鱼 image / 右上时钟+整月历 / 中层左热力图+右统计竖卡 / 右下标语
-  return R"LAY({
-  "version": 1,
-  "dataSources": [
-    {
-      "id": "gh",
-      "type": "github.user",
-      "params": {
-        "user": "datawhalechina"
-      }
-    },
-    {
-      "id": "repo",
-      "type": "github.repo",
-      "params": {
-        "owner": "datawhalechina",
-        "repo": "leeml-notes"
-      }
-    }
-  ],
-  "resources": [
-    {
-      "id": "whale_logo",
-      "w": 220,
-      "h": 192,
-      "data": "AAAAAAAAAAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAPgAAP///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAP/AAH////AAAAAAAAAAAAAAAAAAAAAAAAAAAAH/8AB////gAAAAAAAAAAAAAAAAAAAAAAAAAAAB//gAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/4AP///4AAAAAAAAAAAAAAAAAAAAAAAAAAAAH//AD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAB//4A///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/+AP///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//gH///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/8B///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/Af//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfwH//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8B//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAf/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwH/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcB/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQH4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH//////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////gAAAAAAAAAAAAAAAAAAAAAAAAAB//////////+AAAAAAAAAAAAAAAAAAAAAAAAAB///////////4AAAAAAAAAAAAAAAAAAAAAAAAB////////////gAAAAAAAAAAAAAAAAAAAAAAAB////////////+AAAAAAAAAAAAAAAAAAAAAAAB/////////////wAAAAAAAAAAAAAAAAAAAAAAB//////////////AAAAAAAAAAAAAAAAAAAAAAA//////////////4AAAAAAAAAAAAAAAAAAAAAA///////////////gAAAAAAAAAAAAAAAAAAAAAf//////////////8AAAAAAAAAAAAAAAAAAAAAf///////////////gAAAAAAAAAAAAAAAAAAAAP///////////////8AAAAAAAAAAAAAAAAAAAAH////////////////gAAAAAAAAAAAAAAAAAAAH////////////////8AAAAAAAAAAAAAAAAAAAD/////////////////gAAAAAAAAAAAAAAAAAAB/////////////////8AAAAAAAAAAAAAAAAAAA//////////////////gAAAAAAAAAAAAAAAAAAf/////////////////8AAAAAAAAAAAAAAAAAAP//////////////////gAAAAAAAAAAAAAAAAAH//////////////////8AAAAAAAAAAAAAAAAAD///////////////////gAAAAAAAAAAAAAAAAB///////////////////8AAAAAAAAAAAAAAAAA////////////////////AAAAAAAAAAAAAAAAAf///////////////////4AAAAAAAAAAAAAAAAH////////////////////AAAAAAAAAAAAAAAAD////////////////////wAAAAAAAAAAAAAAAB////////////////////+AAAAAAAAAAAAAAAA/////////////////////wAAAAAAAAAAAAAAAP////////////////////8AAAAAAAAAAAAAAAH/////////////////////gAAAAAAAAAAAAAAD/////////////////////4AAAAAAAAAAAAAAB//////////////////////AAAAAAAAAAAAAAAf/////////////////////4AAAAAAAAAAAAAAP/////////////////////+AAAAAAAAAAAAAAD//////////////////////wAAAAAAAAAAAAAB//////////////////////8AAAAAAAAAAAAAA///////////////////////AAAAAAAAAAAAAAP//////////////////////4AAAAAAAAAAAAAH//////////////////////+AAAAAAAAAAAAAB///////////////////////wAAAAAAAAAAAAA///////////////////////8AAAAAAAAAAAAAf///////////////////////gAAAAAAAAAAAAH///////////////////////4AAAAAACAAAAAD///////////////////////+AAAAAABwAAAAA////////////////////////wAAAAAAeAAAAAf///////////////////////8AAAAAAPwAAAAH////////////////////////AAAAAAH+AAAAD////////////////////////4AAAAAB/wAAAA////////////////////////+AAAAAA/+AAAAf////////////////////////gAAAAAP/gAAAH////////////////////////4AAAAAD/8AAAD/////////////////////////AAAAAB//AAAA/////////////////////////wAAAAAf/wAAAP////////////////////////8AAAAAH/+AAAH/////////////////////////AAAAAD//gAAB/////////////////////////wAAAAA//4AAA/////////////////////////+AAAAAP/+AAAP/////////////////////////gAAAAD//wAAD/////////////////////////4AAAAA//8AAB/////////////////////////+AAAAAP//AAAf/////////////////////////gAAAAH//wAAH/////////////////////////4AAAAB//8AAD//////////////////////////AAAAAf//AAA//////////////////////////wAAAAH//wAAP/////////////////////////8AAAAB//8AAD//////////////////////////AAAAAf//AAB//////////////////////////wAAAAH//wAAf/////////////////////////8AAAAB//8AAH//////////////////////////AAB+Af//AAB//////////////////////////wA//////wAA//////////////////////////8B//////8AAP//////////////////////////B///////AAD//////////////////////////w///////wAA//////////////////////////8P//////8AAf//////////////////////////B///////gAP//////////////////////////wP//////8AH//////////////////////////8B///////wD//////////////////j////////AP///////D//////////////////gP///////wB//////////////////////////wB///////8AP/////////////////////////4AP///////AB/////////////////////////8AB///////wAP/////////////////////////AAf//////8AA/////////////////////////wAH///////AAB////////////////////////8AB///////gAAAfAD/////////////////////AAf//////4AAAAAAf////////////////////wB3//////+AAAAAAD////////////////////+Af///////gAAAAAAf////////////////////wH///////wAAAAAAD////////////////////+A///////8AAAAAAAf/////////////////////////////AAAAAAAH/////////////////////////////wAAAAAAA/////////////////////////////4AAAAAAAH////////////////////////////+AAAAAAAA/////////////////////////////gAAAAAAAH////////////////////////////wAAAAAAAA////////////////////////////8AAAAAAAAH///////////////////////////+AAAAAAAAA////////////////////////////gAAAAAAAAH///////////////////////////wAAAAAAAAA/////////////////////////3/8AAAAAAAAAH////////////////////////B/+AAAAAAAAAA///////////////////////+A//gAAAAAAAAAH//////////////////////8AP/wAAAAAAAAAA//////////////////////wAH/4AAAAAAAAAAH/////////////////////AAD/+AAAAAAAAAAA////////////////////+AAB//AAAAAAAAAAAH///////////////////+AAAf/gAAAAAAAAAAA////////////////////AAAP/4AAAAAAAAAAAH///////////////////gAAH/8AAAAAAAAAAAA///////////////////gAAD/+AAAAAAAAAAAAH//////////////////wAAB//AAAAAAAAAAAAA//////////////////4AAA//wAAAAAAAAAAAAD/////////////////8AAAf/4AAAAAAAAAAAAAf////////////////+AAAP/8AAAAAAAAAAAAAD////////////////+AAAP/+AAAAAAAAAAAAAAf////////////////AAAH//AAAAAAAAAAAAAAD////////////////AAAD//gAAAAAAAAAAAAAAP///////////////gAAD//wAAAAAAAAAAAAAAB///////////////gAAB//4AAAAAAAAAAAAAAAP//////////////gAAA//4AAAAAAAAAAAAAAAB//////////////gAAA//8AAAAAAAAAAAAAAAAH/////////////gAAA//+AAAAAAAAAAAAAAAAA/////////////gAAAf//AAAAAAAAAAAAAAAAAH////////////gAAAf//AAAAAAAAAAAAAAAAAAf///////////AAAAf//gAAAAAAAAAAAAAAAAAD//////////+AAAAf//wAAAAAAAAAAAAAAAAAAP/////////8AAAAf//wAAAAAAAAAAAAAAAAAAB/////////4AAAAf//4AAAAAAAAAAAAAAAAAAAH////////AAAAA///4AAAAAAAAAAAAAAAAAAAA///////8AAAAB///8AAAAAAAAAAAAAAAAAAAAD//////AAAAAD///8AAAAAAAAAAAAAAAAAAAAAP///+AAAAAAP///8AAAAAAAAAAAAAAAAAAAAAA////wAAAAB////8AAAAAAAAAAAAAAAAAAAAAAD////8AAAf////8AAAAAAAAAAAAAAAAAAAAAAAP////////////8AAAAAAAAAAAAAAAAAAAAAAAA////////////8AAAAAAAAAAAAAAAAAAAAAAAAB///////////8AAAAAAAAAAAAAAAAAAAAAAAAAH//////////4AAAAAAAAAAAAAAAAAAAAAAAAAAP/////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAA"
-    }
-  ],
-  "layout": {
-    "resolution": [
-      800,
-      480
-    ],
-    "widgets": [
-      {
-        "slot": "tl",
-        "slotRect": {
-          "x": 12,
-          "y": 14,
-          "w": 330,
-          "h": 264
-        },
-        "type": "image",
-        "resBW": "whale_logo"
-      },
-      {
-        "slot": "tr",
-        "slotRect": {
-          "x": 354,
-          "y": 14,
-          "w": 426,
-          "h": 264
-        },
-        "type": "clock",
-        "calendar": true,
-        "align": "right"
-      },
-      {
-        "slot": "bl",
-        "slotRect": {
-          "x": 12,
-          "y": 282,
-          "w": 500,
-          "h": 160
-        },
-        "type": "heatMap",
-        "source": "repo",
-        "title": "GitHub Contribution"
-      },
-      {
-        "slot": "br",
-        "slotRect": {
-          "x": 524,
-          "y": 282,
-          "w": 264,
-          "h": 160
-        },
-        "type": "stats",
-        "variant": "chips",
-        "fields": [
-          "public_repos",
-          "stars",
-          "forks",
-          "followers"
-        ],
-        "labels": [
-          "Repositories",
-          "Stars",
-          "Forks",
-          "Followers"
-        ]
-      },
-      {
-        "slot": "ticker",
-        "slotRect": {
-          "x": 500,
-          "y": 448,
-          "w": 288,
-          "h": 20
-        },
-        "type": "text",
-        "size": "s",
-        "align": "right",
-        "text": "Keep coding. Keep shipping."
-      }
-    ]
-  }
-})LAY";
+  // 实机 C2 版式的组件分解版（与模拟器 SAMPLE 一致；v1.2：slot 可省略、clock 拆出
+  // date/calendar、统计拆为 4 个单字段独立条卡、title 艺术体斜体字标（Georgia Bold
+  // Italic）、鲸鱼独立横纵缩放铺满；鲸鱼走保留 id whale_pixel = 固件内置资源）
+  return R"LAY({"version":1,"dataSources":[
+    {"id":"gh","type":"github.user","params":{"user":"datawhalechina"}},
+    {"id":"repo","type":"github.repo","params":{"owner":"datawhalechina","repo":"leeml-notes"}}],
+  "resources":[],
+  "layout":{"resolution":[800,480],"widgets":[
+    {"slotRect":{"x":12,"y":14,"w":330,"h":46},"type":"title"},
+    {"slotRect":{"x":12,"y":66,"w":214,"h":196},"type":"image","resBW":"whale_pixel"},
+    {"slotRect":{"x":12,"y":266,"w":330,"h":22},"type":"repo","align":"left"},
+    {"slotRect":{"x":524,"y":14,"w":264,"h":62},"type":"clock","align":"right"},
+    {"slotRect":{"x":524,"y":84,"w":264,"h":26},"type":"date","size":"s","align":"right"},
+    {"slotRect":{"x":524,"y":116,"w":264,"h":176},"type":"calendar"},
+    {"slotRect":{"x":524,"y":296,"w":264,"h":38},"type":"stats","variant":"chips","color":"red",
+     "fields":["public_repos"],"labels":["Repositories"]},
+    {"slotRect":{"x":524,"y":338,"w":264,"h":38},"type":"stats","variant":"chips",
+     "fields":["stars"],"labels":["Stars"]},
+    {"slotRect":{"x":524,"y":380,"w":264,"h":38},"type":"stats","variant":"chips",
+     "fields":["forks"],"labels":["Forks"]},
+    {"slotRect":{"x":524,"y":422,"w":264,"h":38},"type":"stats","variant":"chips","color":"red",
+     "fields":["followers"],"labels":["Followers"]},
+    {"slotRect":{"x":12,"y":296,"w":500,"h":170},"type":"heatMap","source":"repo","title":"GitHub Contribution"}]}})LAY";
 }
 
 namespace {
@@ -173,12 +87,11 @@ CheckResult check(const String& json) {
   }
   r.sourceCount = sourceIds.size();
 
-  // 槽位占用表（规则 4）
-  std::vector<String> usedSlots;
+  // 槽位（规则 4，v1.2）：slot 可选 = 默认几何提示，不再查重；无 slot 时须给出 slotRect
   static const char* kQuadrants[] = {"tl", "tr", "bl", "br", "ticker"};
-  static const char* kTypes[] = {"clock",   "stats", "barChart", "pet",
-                                 "text",    "image", "qr",       "ticker",
-                                 "heatMap"};
+  static const char* kTypes[] = {"clock",  "date",     "calendar", "stats",
+                                 "barChart", "heatMap", "text",    "image",
+                                 "repo",   "title",    "qr",       "ticker"};
 
   JsonArray widgets = layoutO["widgets"];
   if (!widgets || widgets.size() == 0) {
@@ -186,22 +99,20 @@ CheckResult check(const String& json) {
   } else {
     for (JsonObject w : widgets) {
       ++r.widgetCount;
-      const char* slot = w["slot"] | "";
+      const char* slot = w["slot"] | "-";
       const char* type = w["type"] | "";
-      // 槽位合法 + 唯一
-      bool slotOk = false;
-      for (const char* q : kQuadrants) slotOk |= !strcmp(slot, q);
-      if (!slotOk) { r.errors += String("规则4: 非法 slot '") + slot + "'\n"; continue; }
-      for (const String& u : usedSlots)
-        if (u == slot) r.errors += String("规则4: slot '") + slot + "' 重复占用\n";
-      usedSlots.push_back(slot);
+      if (w["slot"].is<const char*>()) {
+        bool slotOk = false;
+        for (const char* q : kQuadrants) slotOk |= !strcmp(slot, q);
+        if (!slotOk) { r.errors += String("规则4: 非法 slot '") + slot + "'\n"; continue; }
+      } else if (w["slotRect"].isNull()) {
+        r.errors += "规则4: 无 slot 时必须给出 slotRect\n";
+        continue;
+      }
       // 类型注册（规则 5）
       bool typeOk = false;
       for (const char* t : kTypes) typeOk |= !strcmp(type, t);
       if (!typeOk) { r.errors += String("规则5: 未注册类型 '") + type + "'\n"; continue; }
-      // ticker 槽类型限制（规则 4）
-      if (!strcmp(slot, "ticker") && strcmp(type, "ticker") && strcmp(type, "text"))
-        r.errors += String("规则4: ticker 槽不允许类型 '") + type + "'\n";
       // 规则 12（v1.1）：slotRect 覆写边界
       if (w["slotRect"].is<JsonObject>()) {
         JsonObject sr = w["slotRect"];

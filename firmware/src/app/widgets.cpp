@@ -10,6 +10,7 @@
 #include "resources/font5x7.h"
 #include "resources/octicons.h"
 #include "resources/whale_pixel.h"
+#include "resources/title_wordmark.h"
 
 namespace widgets {
 
@@ -159,14 +160,15 @@ long fieldOf(const char* f) {
 }
 
 // ---- Widget 绘制器 ----
+
+// 时钟（v1.2 拆分后 = 纯点阵时间数字；日期/日历独立为 date/calendar 组件）
 void drawClock(Rect r, JsonObject w) {
-  auto& d = canvas::get();
   const time_t now = time(nullptr);
   struct tm tmv;
   localtime_r(&now, &tmv);
   const String align = w["align"] | "center";
 
-  // 点阵时间（px=9 gap=7，坐标与模拟器一致：ty=r.y+16）
+  // 点阵时间（px=9 gap=7，与模拟器同款；拆分后槽内垂直居中）
   char tb[8];
   snprintf(tb, sizeof(tb), "%02d:%02d", tmv.tm_hour, tmv.tm_min);
   const int px = 9, gap = 7;
@@ -174,91 +176,92 @@ void drawClock(Rect r, JsonObject w) {
   int tx = r.x + (r.w - tw) / 2;
   if (align == "right") tx = r.x + r.w - 16 - tw;
   if (align == "left") tx = r.x + 16;
-  drawPixelDigits(tb, tx, r.y + 16, px, gap);
+  drawPixelDigits(tb, tx, r.y + (r.h - 7 * px) / 2, px, gap);
+}
 
-  // 日期行（模拟器：基线 r.y+102，避点阵数字下缘 ~79）
+// 日期：YYYY-MM-DD 周几（v1.2：原 clock 日期行独立成组件）
+void drawDate(Rect r, JsonObject w) {
+  const time_t now = time(nullptr);
+  struct tm tmv;
+  localtime_r(&now, &tmv);
   static const char* kWd[] = {"Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"};
   char db[24];
   snprintf(db, sizeof(db), "%04d-%02d-%02d %s", tmv.tm_year + 1900,
            tmv.tm_mon + 1, tmv.tm_mday, kWd[tmv.tm_wday]);
-  d.setTextColor(GxEPD_BLACK);
-  d.setTextSize(2);
-  int dx = r.x + (r.w - strW(db, 2)) / 2;
-  if (align == "right") dx = r.x + r.w - 16 - strW(db, 2);
-  if (align == "left") dx = r.x + 16;
-  d.setCursor(dx, r.y + 88);  // 模拟器基线 y+102 的顶线等效（size2 高 14）
-  d.print(db);
+  drawTextAt(r, db, sizePx(w["size"] | "m"), w["align"] | "center",
+             w["color"] | "black");
+}
 
-  if (!w["calendar"] | false) return;
-  // 日历：矮槽（<220px，概念图上层右块）渲染"周日历条"——表头 Su..Sa + 本周 7 天，
-  // 今日红圈（概念图原始措辞即"周日历红圈当日"；整月历与时钟在 148px 内必然重叠，
-  // 只有高槽才装得下整月）
-  if (r.h < 220) {
-    const int cw2 = 40, ch2 = 24;
-    const int gw2 = cw2 * 7;
-    int bx2 = r.x + (r.w - gw2) / 2;
-    if (align == "right") bx2 = r.x + r.w - 16 - gw2;
-    const int by2 = r.y + r.h - 8 - 2 * ch2;
-    static const char* kHead2[] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
-    for (int i = 0; i < 7; i++) {
-      const String h = kHead2[i];
-      d.setTextColor(GxEPD_BLACK);
-      d.setTextSize(1);
-      d.setCursor(bx2 + i * cw2 + (cw2 - strW(h, 1)) / 2, by2 + 3);
-      d.print(h);
-    }
-    // 本周 = 以今天为锚，回退到本周日
-    struct tm week0 = tmv;
-    week0.tm_mday -= tmv.tm_wday;
-    mktime(&week0);
-    for (int i = 0; i < 7; i++) {
-      struct tm day = week0;
-      day.tm_mday += i;
-      mktime(&day);
-      const int cx = bx2 + i * cw2 + cw2 / 2, cy = by2 + ch2 + ch2 / 2;
-      const String ds = String(day.tm_mday);
-      const bool today = (day.tm_mday == tmv.tm_mday);
-      d.setTextColor(GxEPD_BLACK);
-      d.setTextSize(2);
-      d.setCursor(cx - strW(ds, 2) / 2, cy - 7);
-      d.print(ds);
-      if (today) d.drawCircle(cx, cy, 13, GxEPD_RED);
-    }
-    return;
-  }
-  // 高槽：整月日历（cw=40 ch=24 贴槽底，今日红圈）
-  const int cw = 40, ch = 24;
+// 日历（v1.2 独立组件）：槽高 ≥150px 渲染整月阵（Su–Sa 表头 + 当月日期，今日红圈）；
+// 矮槽 = 周日历条（表头 + 本周 7 天）。列宽按槽宽自适应（窄槽不溢出），贴槽底排布。
+void drawCalendar(Rect r, JsonObject) {
+  auto& d = canvas::get();
+  const time_t now = time(nullptr);
+  struct tm tmv;
+  localtime_r(&now, &tmv);
+  const bool month = r.h >= 150;
+  int cw = (r.w - 8) / 7;
+  if (cw > 40) cw = 40;
+  if (cw < 24) cw = 24;
+  int ch = month ? 24 : (r.h - 10) / 2;
+  if (!month && ch > 24) ch = 24;
+  if (!month && ch < 18) ch = 18;
   struct tm first = tmv;
   first.tm_mday = 1;
   mktime(&first);
-  struct tm last = first;
-  last.tm_mon += 1;
-  last.tm_mday = 0;
-  const int days = mktime(&last) != (time_t)-1 ? last.tm_mday : 30;
-  const int rows = (first.tm_wday + days + 6) / 7;
-  const int gw = cw * 7, gh = ch * (rows + 1);
-  int bx = r.x + (r.w - gw) / 2;
-  if (align == "right") bx = r.x + r.w - 16 - gw;
-  const int by = r.y + r.h - 12 - gh;
+  int days = 7;
+  if (month) {
+    struct tm last = first;
+    last.tm_mon += 1;
+    last.tm_mday = 0;
+    days = mktime(&last) != (time_t)-1 ? last.tm_mday : 30;
+  }
+  const int rows = month ? (first.tm_wday + days + 6) / 7 : 1;
+  const int bx = r.x + (r.w - cw * 7) / 2;
+  const int by = r.y + r.h - 6 - ch * (rows + 1);
   static const char* kHead[] = {"Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"};
   for (int i = 0; i < 7; i++) {
     const String h = kHead[i];
     d.setTextColor(GxEPD_BLACK);
     d.setTextSize(1);
-    d.setCursor(bx + i * cw + (cw - strW(h, 1)) / 2, by + 4);
+    d.setCursor(bx + i * cw + (cw - strW(h, 1)) / 2, by + 3);
     d.print(h);
   }
-  for (int i = 1; i <= days; i++) {
-    const int col = (first.tm_wday + i - 1) % 7, row = (first.tm_wday + i - 1) / 7;
+  struct tm week0 = tmv;
+  week0.tm_mday -= tmv.tm_wday;
+  mktime(&week0);
+  for (int i = 0; i < days; i++) {
+    struct tm day = month ? first : week0;
+    day.tm_mday = month ? i + 1 : week0.tm_mday + i;
+    mktime(&day);
+    const int col = month ? (first.tm_wday + i) % 7 : i;
+    const int row = month ? (first.tm_wday + i) / 7 : 0;
     const int cx = bx + col * cw + cw / 2, cy = by + ch + row * ch + ch / 2;
-    const String day = String(i);
-    const bool today = (i == tmv.tm_mday);
+    const String ds = String(day.tm_mday);
+    const bool today = (day.tm_yday == tmv.tm_yday && day.tm_year == tmv.tm_year);
     d.setTextColor(GxEPD_BLACK);
     d.setTextSize(2);
-    d.setCursor(cx - strW(day, 2) / 2, cy - 7);
-    d.print(day);
-    if (today) d.drawCircle(cx, cy, 14, GxEPD_RED);
+    d.setCursor(cx - strW(ds, 2) / 2, cy - 7);
+    d.print(ds);
+    if (today) d.drawCircle(cx, cy, cw * 3 / 8 > 14 ? 14 : cw * 3 / 8, GxEPD_RED);
   }
+}
+
+// 仓库标识（v1.2）：Octicons repo 图标（红 = 一级强调小面积）+ "login / repo"
+// （数据来自 user/repo 缓存；原 stats 竖卡的标识行拆出独立组件）
+void drawStatIcon(int cx, int cy, int kind, uint16_t c);  // 定义在 stats 段
+void drawRepo(Rect r, JsonObject w) {
+  String label;
+  github::UserStats u;
+  if (github::loadCachedUser(u)) label = u.login;
+  github::RepoStats rp;
+  if (github::loadCachedRepo(rp) && rp.fullName.length()) {
+    label += " / " + rp.fullName.substring(rp.fullName.indexOf('/') + 1);
+  }
+  if (!label.length()) label = "github";
+  drawStatIcon(r.x + 13, r.y + r.h / 2, 0, GxEPD_RED);
+  drawGlyphText(r.x + 32, r.y + (r.h - 14) / 2, label, 1.6f, 2.0f,
+                colorOf(w["color"] | "black"));
 }
 
 // 统计图标：GitHub Octicons 22px 栅格化位图（与模拟器 drawIcon 同源同缩放）
@@ -277,24 +280,41 @@ void drawStats(Rect r, JsonObject w) {
   JsonArray fields = w["fields"];
   JsonArray labels = w["labels"];
   const int n = fields.size();
-  // 竖卡（模拟器规则：h > w*0.55 且 ≥3 项）——概念图右下形态
-  if (r.h > r.w * 0.55f && n >= 3) {
-    // 数据源标识行（用户 · 仓库，来自缓存；跨 user/repo 两源聚合时必读）
-    {
-      String srcLine;
-      github::UserStats u;
-      if (github::loadCachedUser(u)) srcLine = u.login;
-      github::RepoStats rp;
-      if (github::loadCachedRepo(rp) && rp.fullName.length()) {
-        // fullName = "owner/repo"，去掉与用户名重复的 owner 前缀
-        String repo = rp.fullName.substring(rp.fullName.indexOf('/') + 1);
-        srcLine += " / " + repo;
-      }
-      if (srcLine.length())
-        drawGlyphText(r.x + 4, r.y + 2, srcLine, 1.0f, 1.0f, GxEPD_BLACK);
+  // 单字段 = 独立卡（v1.2 拆分形态；自适应：矮宽条单行 / 高卡上下排）
+  if (n == 1) {
+    const char* f = fields[0];
+    const int kind = !strcmp(f, "public_repos") ? 0 : !strcmp(f, "stars") ? 1
+                   : !strcmp(f, "forks") ? 2 : 3;
+    const bool one = r.h < 56;
+    d.drawRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4, GxEPD_BLACK);
+    drawStatIcon(r.x + 20, r.y + r.h / 2, kind, GxEPD_BLACK);
+    String label = labels ? (labels[0] | String(f)) : String(f);
+    const long v = fieldOf(f);
+    const String vs = v < 0 ? "-" : fmtK(v);
+    if (one) {  // 矮宽条：图标 + 标签 + 数值同行
+      d.setTextColor(GxEPD_BLACK);
+      d.setTextSize(1);
+      d.setCursor(r.x + 38, r.y + r.h / 2 - 4);
+      d.print(label);
+      d.setTextColor(colorOf(w["color"] | "black"));
+      d.setTextSize(2);
+      d.setCursor(r.x + r.w - 12 - strW(vs, 2), r.y + r.h / 2 - 8);
+      d.print(vs);
+    } else {    // 高卡：标签上、大数值下
+      d.setTextColor(GxEPD_BLACK);
+      d.setTextSize(1);
+      d.setCursor(r.x + 38, r.y + 12);
+      d.print(label);
+      d.setTextColor(colorOf(w["color"] | "black"));
+      d.setTextSize(3);
+      d.setCursor(r.x + r.w - 12 - strW(vs, 3), r.y + r.h - 28);
+      d.print(vs);
     }
-    Rect cards = {r.x, r.y + 14, r.w, r.h - 14};  // 卡片区让出标识行
-    r = cards;
+    return;
+  }
+  // 竖卡（模拟器规则：h > w*0.55 且 ≥3 项）——概念图右下形态
+  // （v1.2：数据源标识行拆出为独立 repo 组件，stats 回归纯数字卡）
+  if (r.h > r.w * 0.55f && n >= 3) {
     const int rh = (r.h - 8 * (n - 1)) / n;
     for (int i = 0; i < n; i++) {
       const int y = r.y + i * (rh + 8);
@@ -457,33 +477,49 @@ void drawText(Rect r, JsonObject w) {
 }
 
 // 1bpp 位图按槽适配缩放绘制（目标驱动最近邻采样，任意比例无空隙）。
-// scale 上限 8（模拟器同规则，防止小图放成马赛克巨画）
-void drawBitmapResource(Rect r, const uint8_t* bits, int bw, int bh, uint16_t color = GxEPD_BLACK, int xBias = 0) {
+// fill=true（image）：横纵独立缩放铺满槽位——横向/纵向拉伸即时可见（等比适配在
+// 高度受限时拉宽只加留白、小槽位缩放甚至为负，是"拉伸不起作用"的根因）；
+// fill=false（title 字标）：等比适配居中，艺术字形不变形。scale 上限 8（防马赛克巨画）
+void drawBitmapResource(Rect r, const uint8_t* bits, int bw, int bh,
+                        uint16_t color = GxEPD_BLACK, bool fill = false) {
   auto& d = canvas::get();
   const int stride = (bw + 7) / 8;
-  float scale = (float)(r.w - 16) / bw < (float)(r.h - 16) / bh
-                    ? (float)(r.w - 16) / bw
-                    : (float)(r.h - 16) / bh;
-  if (scale > 8) scale = 8;
-  const int dw = (int)(bw * scale), dh = (int)(bh * scale);
-  const int ox = r.x + (r.w - dw) / 2 + xBias, oy = r.y + (r.h - dh) / 2;
+  float sx, sy;
+  if (fill) {
+    sx = (float)r.w / bw;
+    sy = (float)r.h / bh;
+  } else {
+    sx = sy = (float)r.w / bw < (float)r.h / bh ? (float)r.w / bw : (float)r.h / bh;
+  }
+  if (sx > 8) sx = 8;
+  if (sy > 8) sy = 8;
+  const int dw = (int)(bw * sx), dh = (int)(bh * sy);
+  const int ox = r.x + (r.w - dw) / 2, oy = r.y + (r.h - dh) / 2;
   for (int y = 0; y < dh; y++) {
-    const int sy = (int)(y / scale);
+    const int syy = (int)(y / sy);
     for (int x = 0; x < dw; x++) {
-      const int sx = (int)(x / scale);
-      if (bits[sy * stride + (sx >> 3)] & (0x80 >> (sx & 7)))
+      const int sxx = (int)(x / sx);
+      if (bits[syy * stride + (sxx >> 3)] & (0x80 >> (sxx & 7)))
         d.fillRect(ox + x, oy + y, 1, 1, color);
     }
   }
 }
 
-void drawPet(Rect r, JsonObject) {
-  drawBitmapResource(r, whale_pixel::BITS, whale_pixel::W, whale_pixel::H);
+// 标题字标（v1.2）：Whale-Dock 艺术体 1bpp 位图（tools/make_title.py 生成，
+// 与 console/js/title_art.js 同源）。等比适配居中，无专有字段。
+void drawTitle(Rect r, JsonObject) {
+  drawBitmapResource(r, title_wordmark::BITS, title_wordmark::W, title_wordmark::H);
 }
 
 // image：resources 内联 1bpp 位图。resBW（黑）必有；resR/resY 可选，各自独立
-// 资源与尺寸上红/黄平面；资源缺失/尺寸不符回退内置鲸鱼
+// 资源与尺寸上红/黄平面；保留 id "whale_pixel" = 固件内置资源（v1.2 附录 B，
+// 不随布局内联）；资源缺失/尺寸不符回退内置鲸鱼
 void drawImageRes(Rect r, JsonObject w, JsonDocument& doc) {
+  if (!strcmp(w["resBW"] | "", "whale_pixel")) {
+    drawBitmapResource(r, whale_pixel::BITS, whale_pixel::W, whale_pixel::H,
+                       GxEPD_BLACK, true);
+    return;
+  }
   auto findRes = [&](const char* id) -> JsonObject {
     for (JsonObject res : doc["resources"].as<JsonArray>())
       if (id && !strcmp(res["id"] | "", id)) return res;
@@ -511,10 +547,11 @@ void drawImageRes(Rect r, JsonObject w, JsonDocument& doc) {
   int rw = 0, rh = 0;
   uint8_t* bwBits = decode(findRes(w["resBW"] | ""), rw, rh);
   if (!bwBits) {
-    drawBitmapResource(r, whale_pixel::BITS, whale_pixel::W, whale_pixel::H);
+    drawBitmapResource(r, whale_pixel::BITS, whale_pixel::W, whale_pixel::H,
+                       GxEPD_BLACK, true);
     return;
   }
-  drawBitmapResource(r, bwBits, rw, rh, GxEPD_BLACK, 8);  // 视觉重心右移（位图右侧喷水留白偏多）
+  drawBitmapResource(r, bwBits, rw, rh, GxEPD_BLACK, true);
   free(bwBits);
   static const char* kColorKeys[2] = {"resR", "resY"};
   static const uint16_t kColors[2] = {GxEPD_RED, GxEPD_YELLOW};
@@ -522,7 +559,7 @@ void drawImageRes(Rect r, JsonObject w, JsonDocument& doc) {
     int cw2 = 0, ch2 = 0;
     uint8_t* bits = decode(findRes(w[kColorKeys[i]] | ""), cw2, ch2);
     if (bits) {
-      drawBitmapResource(r, bits, cw2, ch2, kColors[i], 8);
+      drawBitmapResource(r, bits, cw2, ch2, kColors[i], true);
       free(bits);
     }
   }
@@ -553,11 +590,14 @@ bool render(const String& layoutJson) {
     const Rect r = rectOf(w);
     const String type = w["type"] | "";
     if (type == "clock") drawClock(r, w);
+    else if (type == "date") drawDate(r, w);
+    else if (type == "calendar") drawCalendar(r, w);
     else if (type == "stats") drawStats(r, w);
     else if (type == "barChart") drawBarChart(r, w);
     else if (type == "heatMap") drawHeatMap(r, w);
     else if (type == "text") drawText(r, w);
-    else if (type == "pet") drawPet(r, w);
+    else if (type == "repo") drawRepo(r, w);
+    else if (type == "title") drawTitle(r, w);
     else if (type == "ticker") drawTicker(r, w);
     else if (type == "qr") drawQr(r, w);
     else if (type == "image") drawImageRes(r, w, doc);

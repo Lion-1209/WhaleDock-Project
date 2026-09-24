@@ -10,3 +10,4 @@
 *.7z binary
 *.stp binary
 *.dxf binary
+*.min.js -diff

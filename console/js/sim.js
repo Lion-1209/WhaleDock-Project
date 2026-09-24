@@ -1,11 +1,11 @@
-// 鲸屿 WhaleDock · 显示协议 v1.1 模拟器（零依赖静态页）
+// 鲸屿 WhaleDock · 显示协议 v1.2 模拟器（零依赖静态页）
 // 校验规则与 docs/显示协议-v1.md §9、firmware/src/app/layout.cpp 同源；
-// 默认示例 = 概念图-v2（鲸屿形态）屏幕版式 1:1 复刻。
+// 默认示例 = 实机 C2 版式的组件分解版（v1.2：slot 可选、clock 拆分、新增 date/calendar/repo/title）。
 // 三方（固件/编辑器/模拟器）规则改动必须同步这三处。
 
 const $ = (id) => document.getElementById(id);
 
-// ---- 协议 §3 槽位几何（与固件一致） ----
+// ---- 协议 §3 槽位几何（与固件一致；v1.2 起 slot 仅为默认几何提示，不再查重） ----
 const SLOTS = {
   tl:     { x: 12,  y: 12,  w: 382, h: 192 },
   tr:     { x: 406, y: 12,  w: 382, h: 192 },
@@ -16,11 +16,13 @@ const SLOTS = {
 
 const COL = { black: '#1c1c1c', red: '#b3382c', yellow: '#d4a017' };
 const PAPER = '#f5f4ef';
-const TYPES = ['clock', 'stats', 'barChart', 'pet', 'text', 'image', 'qr', 'ticker', 'heatMap'];
+const TYPES = ['clock', 'date', 'calendar', 'stats', 'barChart', 'text', 'image',
+               'repo', 'title', 'qr', 'ticker', 'heatMap'];
 const FIELDS = ['public_repos', 'followers', 'stars', 'forks'];
 
-// ---- 默认示例：概念图 v2（鲸屿形态）屏幕版式 1:1 复刻 ----
-// 三层横带构图用 v1.1 slotRect 覆写象限默认几何；鲸鱼 = datawhalelogo.png 转 1bpp 位图资源（协议 image 类型）
+// ---- 默认示例：实机 C2 版式的组件分解版（v1.2）----
+// 左列 = 标题字标 + 鲸鱼 + 仓库标识；右列 = 时间/日期/周日历 + 统计竖卡；底部 = 热力图 + 标语。
+// v1.2 起 slot 可省略（有 slotRect 即可）；鲸鱼 = datawhalelogo.png 转 1bpp 位图资源（协议 image 类型）
 const SAMPLE = `{
   "version": 1,
   "dataSources": [
@@ -40,99 +42,38 @@ const SAMPLE = `{
       }
     }
   ],
-  "resources": [
-    {
-      "id": "whale_logo",
-      "w": 220,
-      "h": 192,
-      "data": "AAAAAAAAAAAAAAAAAAAAAAAAAD/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD//+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAPgAAP///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAP/AAH////AAAAAAAAAAAAAAAAAAAAAAAAAAAAH/8AB////gAAAAAAAAAAAAAAAAAAAAAAAAAAAB//gAf///wAAAAAAAAAAAAAAAAAAAAAAAAAAAAf/4AP///4AAAAAAAAAAAAAAAAAAAAAAAAAAAAH//AD///8AAAAAAAAAAAAAAAAAAAAAAAAAAAAB//4A///+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP/+AP///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//gH///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB/8B///AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH/Af//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAfwH//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8B//AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAf/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwH/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcB/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAfwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQH4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAPAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH///gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAH//////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAP///////4AAAAAAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAA//////////gAAAAAAAAAAAAAAAAAAAAAAAAAB//////////+AAAAAAAAAAAAAAAAAAAAAAAAAB///////////4AAAAAAAAAAAAAAAAAAAAAAAAB////////////gAAAAAAAAAAAAAAAAAAAAAAAB////////////+AAAAAAAAAAAAAAAAAAAAAAAB/////////////wAAAAAAAAAAAAAAAAAAAAAAB//////////////AAAAAAAAAAAAAAAAAAAAAAA//////////////4AAAAAAAAAAAAAAAAAAAAAA///////////////gAAAAAAAAAAAAAAAAAAAAAf//////////////8AAAAAAAAAAAAAAAAAAAAAf///////////////gAAAAAAAAAAAAAAAAAAAAP///////////////8AAAAAAAAAAAAAAAAAAAAH////////////////gAAAAAAAAAAAAAAAAAAAH////////////////8AAAAAAAAAAAAAAAAAAAD/////////////////gAAAAAAAAAAAAAAAAAAB/////////////////8AAAAAAAAAAAAAAAAAAA//////////////////gAAAAAAAAAAAAAAAAAAf/////////////////8AAAAAAAAAAAAAAAAAAP//////////////////gAAAAAAAAAAAAAAAAAH//////////////////8AAAAAAAAAAAAAAAAAD///////////////////gAAAAAAAAAAAAAAAAB///////////////////8AAAAAAAAAAAAAAAAA////////////////////AAAAAAAAAAAAAAAAAf///////////////////4AAAAAAAAAAAAAAAAH////////////////////AAAAAAAAAAAAAAAAD////////////////////wAAAAAAAAAAAAAAAB////////////////////+AAAAAAAAAAAAAAAA/////////////////////wAAAAAAAAAAAAAAAP////////////////////8AAAAAAAAAAAAAAAH/////////////////////gAAAAAAAAAAAAAAD/////////////////////4AAAAAAAAAAAAAAB//////////////////////AAAAAAAAAAAAAAAf/////////////////////4AAAAAAAAAAAAAAP/////////////////////+AAAAAAAAAAAAAAD//////////////////////wAAAAAAAAAAAAAB//////////////////////8AAAAAAAAAAAAAA///////////////////////AAAAAAAAAAAAAAP//////////////////////4AAAAAAAAAAAAAH//////////////////////+AAAAAAAAAAAAAB///////////////////////wAAAAAAAAAAAAA///////////////////////8AAAAAAAAAAAAAf///////////////////////gAAAAAAAAAAAAH///////////////////////4AAAAAACAAAAAD///////////////////////+AAAAAABwAAAAA////////////////////////wAAAAAAeAAAAAf///////////////////////8AAAAAAPwAAAAH////////////////////////AAAAAAH+AAAAD////////////////////////4AAAAAB/wAAAA////////////////////////+AAAAAA/+AAAAf////////////////////////gAAAAAP/gAAAH////////////////////////4AAAAAD/8AAAD/////////////////////////AAAAAB//AAAA/////////////////////////wAAAAAf/wAAAP////////////////////////8AAAAAH/+AAAH/////////////////////////AAAAAD//gAAB/////////////////////////wAAAAA//4AAA/////////////////////////+AAAAAP/+AAAP/////////////////////////gAAAAD//wAAD/////////////////////////4AAAAA//8AAB/////////////////////////+AAAAAP//AAAf/////////////////////////gAAAAH//wAAH/////////////////////////4AAAAB//8AAD//////////////////////////AAAAAf//AAA//////////////////////////wAAAAH//wAAP/////////////////////////8AAAAB//8AAD//////////////////////////AAAAAf//AAB//////////////////////////wAAAAH//wAAf/////////////////////////8AAAAB//8AAH//////////////////////////AAB+Af//AAB//////////////////////////wA//////wAA//////////////////////////8B//////8AAP//////////////////////////B///////AAD//////////////////////////w///////wAA//////////////////////////8P//////8AAf//////////////////////////B///////gAP//////////////////////////wP//////8AH//////////////////////////8B///////wD//////////////////j////////AP///////D//////////////////gP///////wB//////////////////////////wB///////8AP/////////////////////////4AP///////AB/////////////////////////8AB///////wAP/////////////////////////AAf//////8AA/////////////////////////wAH///////AAB////////////////////////8AB///////gAAAfAD/////////////////////AAf//////4AAAAAAf////////////////////wB3//////+AAAAAAD////////////////////+Af///////gAAAAAAf////////////////////wH///////wAAAAAAD////////////////////+A///////8AAAAAAAf/////////////////////////////AAAAAAAH/////////////////////////////wAAAAAAA/////////////////////////////4AAAAAAAH////////////////////////////+AAAAAAAA/////////////////////////////gAAAAAAAH////////////////////////////wAAAAAAAA////////////////////////////8AAAAAAAAH///////////////////////////+AAAAAAAAA////////////////////////////gAAAAAAAAH///////////////////////////wAAAAAAAAA/////////////////////////3/8AAAAAAAAAH////////////////////////B/+AAAAAAAAAA///////////////////////+A//gAAAAAAAAAH//////////////////////8AP/wAAAAAAAAAA//////////////////////wAH/4AAAAAAAAAAH/////////////////////AAD/+AAAAAAAAAAA////////////////////+AAB//AAAAAAAAAAAH///////////////////+AAAf/gAAAAAAAAAAA////////////////////AAAP/4AAAAAAAAAAAH///////////////////gAAH/8AAAAAAAAAAAA///////////////////gAAD/+AAAAAAAAAAAAH//////////////////wAAB//AAAAAAAAAAAAA//////////////////4AAA//wAAAAAAAAAAAAD/////////////////8AAAf/4AAAAAAAAAAAAAf////////////////+AAAP/8AAAAAAAAAAAAAD////////////////+AAAP/+AAAAAAAAAAAAAAf////////////////AAAH//AAAAAAAAAAAAAAD////////////////AAAD//gAAAAAAAAAAAAAAP///////////////gAAD//wAAAAAAAAAAAAAAB///////////////gAAB//4AAAAAAAAAAAAAAAP//////////////gAAA//4AAAAAAAAAAAAAAAB//////////////gAAA//8AAAAAAAAAAAAAAAAH/////////////gAAA//+AAAAAAAAAAAAAAAAA/////////////gAAAf//AAAAAAAAAAAAAAAAAH////////////gAAAf//AAAAAAAAAAAAAAAAAAf///////////AAAAf//gAAAAAAAAAAAAAAAAAD//////////+AAAAf//wAAAAAAAAAAAAAAAAAAP/////////8AAAAf//wAAAAAAAAAAAAAAAAAAB/////////4AAAAf//4AAAAAAAAAAAAAAAAAAAH////////AAAAA///4AAAAAAAAAAAAAAAAAAAA///////8AAAAB///8AAAAAAAAAAAAAAAAAAAAD//////AAAAAD///8AAAAAAAAAAAAAAAAAAAAAP///+AAAAAAP///8AAAAAAAAAAAAAAAAAAAAAA////wAAAAB////8AAAAAAAAAAAAAAAAAAAAAAD////8AAAf////8AAAAAAAAAAAAAAAAAAAAAAAP////////////8AAAAAAAAAAAAAAAAAAAAAAAA////////////8AAAAAAAAAAAAAAAAAAAAAAAAB///////////8AAAAAAAAAAAAAAAAAAAAAAAAAH//////////4AAAAAAAAAAAAAAAAAAAAAAAAAAP/////////4AAAAAAAAAAAAAAAAAAAAAAAAAAAf////////wAAAAAAAAAAAAAAAAAAAAAAAAAAAA////////gAAAAAAAAAAAAAAAAAAAAAAAAAAAAA//////+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAP////wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB//4AAAAAAAAAAAAA"
-    }
-  ],
+  "resources": [],
   "layout": {
-    "resolution": [
-      800,
-      480
-    ],
+    "resolution": [800, 480],
     "widgets": [
-      {
-        "slot": "tl",
-        "slotRect": {
-          "x": 12,
-          "y": 14,
-          "w": 330,
-          "h": 264
-        },
-        "type": "image",
-        "resBW": "whale_logo"
-      },
-      {
-        "slot": "tr",
-        "slotRect": {
-          "x": 354,
-          "y": 14,
-          "w": 426,
-          "h": 264
-        },
-        "type": "clock",
-        "calendar": true,
-        "align": "right"
-      },
-      {
-        "slot": "bl",
-        "slotRect": {
-          "x": 12,
-          "y": 282,
-          "w": 500,
-          "h": 160
-        },
-        "type": "heatMap",
-        "source": "repo",
-        "title": "GitHub Contribution"
-      },
-      {
-        "slot": "br",
-        "slotRect": {
-          "x": 524,
-          "y": 282,
-          "w": 264,
-          "h": 160
-        },
-        "type": "stats",
-        "variant": "chips",
-        "fields": [
-          "public_repos",
-          "stars",
-          "forks",
-          "followers"
-        ],
-        "labels": [
-          "Repositories",
-          "Stars",
-          "Forks",
-          "Followers"
-        ]
-      },
-      {
-        "slot": "ticker",
-        "slotRect": {
-          "x": 500,
-          "y": 448,
-          "w": 288,
-          "h": 20
-        },
-        "type": "text",
-        "size": "s",
-        "align": "right",
-        "text": "Keep coding. Keep shipping."
-      }
+      { "slotRect": { "x": 12,  "y": 14,  "w": 330, "h": 46 },  "type": "title" },
+      { "slotRect": { "x": 12,  "y": 66,  "w": 214, "h": 196 }, "type": "image", "resBW": "whale_pixel" },
+      { "slotRect": { "x": 12,  "y": 266, "w": 330, "h": 22 },  "type": "repo", "align": "left" },
+      { "slotRect": { "x": 524, "y": 14,  "w": 264, "h": 62 },  "type": "clock", "align": "right" },
+      { "slotRect": { "x": 524, "y": 84,  "w": 264, "h": 26 },  "type": "date", "size": "s", "align": "right" },
+      { "slotRect": { "x": 524, "y": 116, "w": 264, "h": 176 }, "type": "calendar" },
+      { "slotRect": { "x": 524, "y": 296, "w": 264, "h": 38 },
+        "type": "stats", "variant": "chips", "color": "red",
+        "fields": ["public_repos"], "labels": ["Repositories"] },
+      { "slotRect": { "x": 524, "y": 338, "w": 264, "h": 38 },
+        "type": "stats", "variant": "chips",
+        "fields": ["stars"], "labels": ["Stars"] },
+      { "slotRect": { "x": 524, "y": 380, "w": 264, "h": 38 },
+        "type": "stats", "variant": "chips",
+        "fields": ["forks"], "labels": ["Forks"] },
+      { "slotRect": { "x": 524, "y": 422, "w": 264, "h": 38 },
+        "type": "stats", "variant": "chips", "color": "red",
+        "fields": ["followers"], "labels": ["Followers"] },
+      { "slotRect": { "x": 12,  "y": 296, "w": 500, "h": 170 },
+        "type": "heatMap", "source": "repo", "title": "GitHub Contribution" }
     ]
   }
 }`;
 
 // ---- 演示数据（内置快照；联网按钮会覆盖 user/repo；热力图需 GraphQL，恒用演示） ----
 const demoData = {
-  gh:   { public_repos: 42, followers: 316 },
-  repo: { stars: 1240, forks: 358,
+  gh:   { login: 'datawhalechina', public_repos: 42, followers: 316 },
+  repo: { fullName: 'datawhalechina/leeml-notes', stars: 1240, forks: 358,
           participation: [18, 25, 31, 22, 40, 35, 28, 33, 45, 38, 52, 47] },
 };
 // 26 周 × 7 天热力图演示矩阵（0-4 级；确定性伪随机，刷新不变）
@@ -178,14 +119,12 @@ function validate(doc) {
   const widgets = doc.layout.widgets || [];
   if (!widgets.length) errors.push('规则4: widgets 不能为空');
 
-  const used = new Set();
   for (const w of widgets) {
-    if (!SLOTS[w.slot]) { errors.push(`规则4: 非法 slot '${w.slot}'`); continue; }
-    if (used.has(w.slot)) errors.push(`规则4: slot '${w.slot}' 重复占用`);
-    used.add(w.slot);
+    // 规则 4（v1.2）：slot 可选（= 默认几何提示，不再查重）；无 slot 时必须给出 slotRect
+    const hasSlot = w.slot !== undefined;
+    if (hasSlot && !SLOTS[w.slot]) { errors.push(`规则4: 非法 slot '${w.slot}'`); continue; }
+    if (!hasSlot && !w.slotRect) { errors.push('规则4: 无 slot 时必须给出 slotRect'); continue; }
     if (!TYPES.includes(w.type)) { errors.push(`规则5: 未注册类型 '${w.type}'`); continue; }
-    if (w.slot === 'ticker' && !['ticker', 'text'].includes(w.type))
-      errors.push(`规则4: ticker 槽不允许类型 '${w.type}'`);
     // v1.1：slotRect 边界
     if (w.slotRect) {
       const r = w.slotRect;
@@ -250,41 +189,6 @@ function drawGuides() {
   ctx.restore();
 }
 
-// 像素鲸鱼（whale_pixel）：概念图 v2 同款造型——头朝右、尾在左上翘、头顶三股喷水、腹部白纹镂空。
-// 22×18 矩阵由 tools/pixelize.html 从概念图-v2-鲸屿.jpg 屏幕左上区（原图 x715-995, y160-385）
-// 点采样提取（阈值 128），仅剔除屏幕边框线；改动需重新提取并与概念图目视比对。
-const WHALE = [
-  '......................',
-  '.............K........',
-  '............K.K.......',
-  '............K.........',
-  '...........KK.........',
-  '...........KK.KK......',
-  '.........KKKKKKKKK....',
-  '........K.KKKKKKKKK...',
-  '...K...KKKKKKKKKKKK...',
-  '...K..KKKKKKKKKKKKK...',
-  '.KKK..KKKKKKKKKKKKK...',
-  '.KKK.KKKKKKKKKKKKKK...',
-  '.KKKKKKKKKKKKKKKKKK...',
-  '...KKKKKKKKKKKKKKKK...',
-  '....KKKKKKKKKKKKKKK...',
-  '....KKKK..KKKKKKKK....',
-  '.....KKKK..KKKKKKK....',
-  '......KKKKK..KKKKK....',
-];
-
-function drawPet(r, w) {
-  const px = Math.floor(Math.min((r.w - 8) / WHALE[0].length, (r.h - 12) / WHALE.length));
-  const ox = Math.round(r.x + (r.w - WHALE[0].length * px) / 2);
-  const oy = Math.round(r.y + (r.h - WHALE.length * px) / 2);
-  ctx.fillStyle = COL.black;
-  for (let y = 0; y < WHALE.length; y++)
-    for (let x = 0; x < WHALE[y].length; x++)
-      if (WHALE[y][x] === 'K')
-        ctx.fillRect(ox + x * px, oy + y * px, px - 1, px - 1);
-}
-
 // 5×7 点阵字模（概念图时钟数字风：粗实体、微斜切）
 const GLYPH5x7 = {
   '0': ['01110', '10001', '10011', '10101', '11001', '10001', '01110'],
@@ -299,18 +203,15 @@ const GLYPH5x7 = {
   '9': ['01110', '10001', '10001', '01111', '00001', '00010', '01100'],
   ':': ['00', '10', '00', '00', '00', '10', '00'],
 };
-// 时钟：点阵时间 + 日期 + 整月日历阵（Su-Sa 表头 + 当月日期 5×7，今日红圈；概念图样式）
+// 时钟（v1.2 拆分后 = 纯点阵时间数字；日期/日历独立为 date/calendar 组件）
 function drawClock(r, w) {
   const now = new Date();
   const align = w.align || 'center';
-  const ax = align === 'right' ? r.x + r.w - 16 : align === 'left' ? r.x + 16 : r.x + r.w / 2;
-  ctx.textAlign = align; ctx.textBaseline = 'alphabetic';
-  // 时间：5×7 点阵字模逐点绘制（概念图点阵数字风）
   const px = 9, gap = 7;
   const timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const totalW = [...timeStr].reduce((a, ch) => a + GLYPH5x7[ch][0].length, 0) * px + (timeStr.length - 1) * gap;
   let tx = align === 'right' ? r.x + r.w - 16 - totalW : align === 'left' ? r.x + 16 : r.x + (r.w - totalW) / 2;
-  const ty = r.y + 16;
+  const ty = r.y + (r.h - 7 * px) / 2;  // 槽内垂直居中（拆分后不再固定贴顶）
   ctx.fillStyle = COL.black;
   for (const ch of timeStr) {
     GLYPH5x7[ch].forEach((row, y) => [...row].forEach((v, x) => {
@@ -318,38 +219,94 @@ function drawClock(r, w) {
     }));
     tx += GLYPH5x7[ch][0].length * px + gap;
   }
-  // 日期行
+}
+
+// 日期：YYYY-MM-DD 周几（原 clock 日期行独立成组件）
+function drawDate(r, w) {
+  const now = new Date();
   const wd = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][now.getDay()];
-  ctx.font = font(20);
-  ctx.fillText(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${wd}`, ax, r.y + 102);
-  // 整月日历阵：表头一行 + 当月日期（首日星期对齐，行数按当月实际占用），贴槽位底部
-  const cw = 40, ch = 24;
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  const dim = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const rows = Math.ceil((first.getDay() + dim) / 7);
-  const gw = cw * 7, gh = ch * (rows + 1);
-  const bx = align === 'right' ? r.x + r.w - 16 - gw : align === 'left' ? r.x + 16 : r.x + (r.w - gw) / 2;
-  const by = r.y + r.h - 12 - gh;
+  const s = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${wd}`;
+  const size = { s: 15, m: 20, l: 26 }[w.size || 'm'];
+  ctx.fillStyle = COL[w.color || 'black'];
+  ctx.font = font(size);
+  ctx.textAlign = w.align || 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(s, w.align === 'right' ? r.x + r.w - 6 : w.align === 'left' ? r.x + 6 : r.x + r.w / 2,
+               r.y + r.h / 2);
+}
+
+// 日历：槽高 ≥150px 渲染整月阵（Su–Sa 表头 + 当月日期，今日红圈），矮槽 = 周日历条
+// （表头 + 本周 7 天）。列宽按槽宽自适应（窄槽不再溢出），贴槽底排布。
+function drawCalendar(r) {
+  const now = new Date();
+  const month = r.h >= 150;
+  const cw = Math.max(24, Math.min(40, Math.floor((r.w - 8) / 7)));
+  const ch = month ? 24 : Math.max(18, Math.min(24, Math.floor((r.h - 10) / 2)));
+  const bx = r.x + (r.w - cw * 7) / 2;
+  const first = month ? new Date(now.getFullYear(), now.getMonth(), 1) : null;
+  const dim = month ? new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() : 7;
+  const rows = month ? Math.ceil((first.getDay() + dim) / 7) : 1;
+  const by = r.y + r.h - 6 - ch * (rows + 1);
+  ctx.textBaseline = 'top'; ctx.textAlign = 'center';
   ctx.font = font(12);
   ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].forEach((d, i) => {
     ctx.fillStyle = 'rgba(28,28,28,0.6)';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
     ctx.fillText(d, bx + i * cw + cw / 2, by);
   });
+  const dayAt = month
+    ? (i) => new Date(now.getFullYear(), now.getMonth(), i + 1)
+    : (i) => new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + i);
   for (let i = 0; i < dim; i++) {
-    const col = (first.getDay() + i) % 7, row = Math.floor((first.getDay() + i) / 7);
+    const d = dayAt(i);
+    const col = month ? (first.getDay() + i) % 7 : i;
+    const row = month ? Math.floor((first.getDay() + i) / 7) : 0;
     const cx = bx + col * cw + cw / 2, cy = by + ch + row * ch + ch / 2;
-    const today = i + 1 === now.getDate();
+    const today = d.toDateString() === now.toDateString();
     ctx.fillStyle = COL.black; ctx.font = font(16, today);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(String(i + 1), cx, cy);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(d.getDate()), cx, cy);
     if (today) {
       ctx.strokeStyle = COL.red; ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.ellipse(cx, cy, 14, 11, 0, 0, Math.PI * 2);
+      ctx.ellipse(cx, cy, Math.min(14, cw * 0.36), 11, 0, 0, Math.PI * 2);
       ctx.stroke();
     }
   }
+}
+
+// 仓库标识：Octicons repo 图标（红 = 一级强调小面积）+ "login / repo"（数据来自 user/repo 缓存）
+function drawRepo(r, w) {
+  const login = (data.gh && data.gh.login) || '';
+  const full = (data.repo && data.repo.fullName) || '';
+  const name = full ? full.substring(full.indexOf('/') + 1) : '';
+  const label = [login, name].filter(Boolean).join(' / ') || 'github';
+  drawIcon(r.x + 13, r.y + r.h / 2, 0, true);
+  ctx.fillStyle = COL[w.color || 'black'];
+  ctx.font = font(16);
+  ctx.textAlign = w.align === 'right' ? 'right' : 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(label, w.align === 'right' ? r.x + r.w - 6 : r.x + 32, r.y + r.h / 2);
+}
+
+// 标题字标：Whale-Dock 艺术体 1bpp 位图（tools/make_title.py 生成；console/js/title_art.js
+// 内嵌、与固件 resources/title_wordmark.* 同源）。满盒适配（字标自带留白，不用 image 的 16px 内缩）。
+function drawTitle(r) {
+  if (!window.TITLE_ART) {
+    ctx.fillStyle = COL.black; ctx.font = font(14);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('title_art.js 未加载', r.x + r.w / 2, r.y + r.h / 2);
+    return;
+  }
+  const { w: bw, h: bh, data } = window.TITLE_ART;
+  const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+  const stride = Math.ceil(bw / 8);
+  const scale = Math.min(r.w / bw, r.h / bh, 4);
+  const ox = r.x + (r.w - bw * scale) / 2, oy = r.y + (r.h - bh * scale) / 2;
+  ctx.fillStyle = COL.black;
+  for (let y = 0; y < bh; y++)
+    for (let x = 0; x < bw; x++)
+      if (bytes[y * stride + (x >> 3)] & (0x80 >> (x & 7)))
+        ctx.fillRect(ox + x * scale, oy + y * scale, Math.ceil(scale), Math.ceil(scale));
 }
 
 // 字段聚合：stats 省略 source 时跨全部数据源取字段（v1.1；概念图四卡跨 user/repo 两源）
@@ -358,9 +315,34 @@ function fieldOf(f) {
   return undefined;
 }
 
-// 统计：chips 变体 = icon + 标签 + 数值 横排小卡（红 icon 仅首末枚，对齐概念图）
+// 统计：单字段 = 独立卡（v1.2：四栏拆分为独立组件）；chips 变体 = icon + 标签 +
+// 数值 横排小卡（红 icon 仅首末枚，对齐概念图）；list = 左标签右数值行
 function drawStats(r, w) {
   const d = w.source ? (data[w.source] || {}) : { public_repos: fieldOf('public_repos'), stars: fieldOf('stars'), forks: fieldOf('forks'), followers: fieldOf('followers') };
+  const ICON_OF = { public_repos: 0, stars: 1, forks: 2, followers: 3 };
+  if (w.variant === 'chips' && w.fields.length === 1) {  // 单字段独立卡（自适应：矮宽条单行 / 高卡上下排）
+    const f = w.fields[0];
+    const one = r.h < 56;
+    ctx.strokeStyle = 'rgba(28,28,28,0.35)'; ctx.lineWidth = 1;
+    ctx.strokeRect(r.x + 2, r.y + 2, r.w - 4, r.h - 4);
+    drawIcon(r.x + 20, r.y + r.h / 2, ICON_OF[f] ?? 0, false);
+    if (one) {  // 矮宽条：图标 + 标签 + 数值同行
+      ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(13);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(w.labels?.[0] ?? f, r.x + 38, r.y + r.h / 2);
+      ctx.fillStyle = COL[w.color || 'black']; ctx.font = font(20, true, true);
+      ctx.textAlign = 'right';
+      ctx.fillText(fmtK(d[f]), r.x + r.w - 12, r.y + r.h / 2);
+    } else {   // 高卡：标签上、大数值下
+      ctx.fillStyle = 'rgba(28,28,28,0.75)'; ctx.font = font(12);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+      ctx.fillText(w.labels?.[0] ?? f, r.x + 38, r.y + 12);
+      ctx.fillStyle = COL[w.color || 'black']; ctx.font = font(24, true, true);
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(fmtK(d[f]), r.x + r.w - 10, r.y + r.h - 10);
+    }
+    return;
+  }
   if (w.variant === 'chips') {
     const rows = w.fields.map((f, i) => ({
       label: w.labels?.[i] ?? f, v: fmtK(d[f]),
@@ -565,7 +547,10 @@ function wrap(text, maxW, size) {
 }
 
 function drawImage(r, w, doc) {
-  const res = (doc.resources || []).find((x) => x.id === w.resBW);
+  // 保留 id whale_pixel = 内置资源（协议 v1.2 附录 B；console/js/whale_art.js 与固件同源）
+  const res = w.resBW === 'whale_pixel'
+    ? window.WHALE_ART
+    : (doc.resources || []).find((x) => x.id === w.resBW);
   ctx.fillStyle = COL.black; ctx.font = font(14);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   if (!res) {
@@ -579,8 +564,10 @@ function drawImage(r, w, doc) {
     return;
   }
   const planes = [['resBW', 'black'], ['resR', 'red'], ['resY', 'yellow']];
-  const scale = Math.min((r.w - 16) / res.w, (r.h - 16) / res.h, 8);
-  const ox = r.x + (r.w - res.w * scale) / 2, oy = r.y + (r.h - res.h * scale) / 2;
+  // v1.2：横纵独立缩放铺满槽位（横向/纵向拉伸即时可见——等比适配在高度受限时
+  // 拉宽只加留白、小槽位缩放甚至为负，是"拉伸不起作用"的根因）；上限 8 防马赛克巨画
+  const sx = Math.min(r.w / res.w, 8), sy = Math.min(r.h / res.h, 8);
+  const ox = r.x, oy = r.y;
   for (const [key, col] of planes) {
     const rr = key === 'resBW' ? res : (doc.resources || []).find((x) => x.id === w[key]);
     if (!rr) continue;
@@ -588,8 +575,11 @@ function drawImage(r, w, doc) {
     ctx.fillStyle = COL[col];
     for (let y = 0; y < rr.h; y++)
       for (let x = 0; x < rr.w; x++)
-        if (bb[y * stride + (x >> 3)] & (0x80 >> (x & 7)))
-          ctx.fillRect(ox + x * scale, oy + y * scale, Math.ceil(scale), Math.ceil(scale));
+        if (bb[y * stride + (x >> 3)] & (0x80 >> (x & 7))) {
+          const dx0 = Math.round(x * sx), dx1 = Math.round((x + 1) * sx);
+          const dy0 = Math.round(y * sy), dy1 = Math.round((y + 1) * sy);
+          ctx.fillRect(ox + dx0, oy + dy0, Math.max(1, dx1 - dx0), Math.max(1, dy1 - dy0));
+        }
   }
 }
 
@@ -621,8 +611,9 @@ function render(doc) {
   } else {
     for (const w of v.widgets) {
       const r = rectOf(w);
-      ({ clock: drawClock, stats: drawStats, barChart: drawBarChart, pet: drawPet,
-         heatMap: drawHeatMap, text: drawText, image: (rr, ww) => drawImage(rr, ww, doc),
+      ({ clock: drawClock, date: drawDate, calendar: drawCalendar, stats: drawStats,
+         barChart: drawBarChart, heatMap: drawHeatMap, text: drawText, repo: drawRepo,
+         title: drawTitle, image: (rr, ww) => drawImage(rr, ww, doc),
          qr: drawQr, ticker: drawTicker })[w.type]?.(r, w);
     }
   }
@@ -644,8 +635,8 @@ function go() {
     setVerdict(false, `未通过（${v.errors.length} 项）：\n` + v.errors.join('\n'));
   } else {
     setVerdict(true, `校验通过：${v.widgets.length} widgets · ${v.sources?.length ?? 0} 数据源 · ${v.mode === 'bitmap' ? '位图' : 'Widget'} 模式\n` +
-      v.widgets.map((w) => `  ${w.slot}${w.slotRect ? '*' : ''} → ${w.type}`).join('\n') +
-      '\n（* = slotRect 覆写几何，v1.1）');
+      v.widgets.map((w) => `  ${w.slot || '-'}${w.slotRect ? '*' : ''} → ${w.type}`).join('\n') +
+      '\n（* = slotRect 覆写几何；v1.2：slot 可省略）');
   }
   render(doc);
 }
@@ -666,8 +657,8 @@ async function fetchLive() {
       else await new Promise((res) => setTimeout(res, 2000));
     }
     data = {
-      gh: { public_repos: u.public_repos, followers: u.followers },
-      repo: { stars: rep.stargazers_count, forks: rep.forks_count,
+      gh: { login: u.login, public_repos: u.public_repos, followers: u.followers },
+      repo: { fullName: rep.full_name, stars: rep.stargazers_count, forks: rep.forks_count,
               participation: part || data.repo.participation },
     };
     $('data-state').textContent =
