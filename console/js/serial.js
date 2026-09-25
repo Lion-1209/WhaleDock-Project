@@ -48,6 +48,11 @@ export class SerialLink {
   async connectTo(entry) {
     const port = entry.port;
     await port.open({ baudRate: BAUD });
+    // Chrome 开口默认拉高 DTR/RTS，ESP32 的串口自动复位电路可能把它当复位脉冲
+    // （用户实测：连接即见 ROM+固件横幅）。立即清信号，把脉冲窗口压到最短；
+    // 若仍复位，板子 ~2s 自愈——探测命令由上层等横幅后再发。
+    try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); }
+    catch (_) { /* 部分驱动不支持，忽略 */ }
     this.port = port;
     this._readDone = this._readLoop();
   }
@@ -64,6 +69,8 @@ export class SerialLink {
       }
     }
     await port.open({ baudRate: BAUD });
+    try { await port.setSignals({ dataTerminalReady: false, requestToSend: false }); }
+    catch (_) { /* 部分驱动不支持，忽略 */ }
     this.port = port;
     this._readDone = this._readLoop();
   }

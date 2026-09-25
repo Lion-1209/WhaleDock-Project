@@ -362,10 +362,20 @@ async function refreshGranted() {
 function afterConnected() {
   appendLog('[页面] 串口已打开（115200）。查询设备状态…');
   setState('unprovisioned');
-  link.send('wifi status');
-  link.send('time');
-  link.send('config show');
-  link.send('ota status');
+  sendProbes();
+  // 连接脉冲可能触发板子复位（USB 串口自动复位特性）：首轮探测若掉进 ~2s
+  // 重启窗口，见到 [固件] 横幅后补发一轮（一次性监听，不动正常流程）
+  {
+    const orig = link.onLine;
+    link.onLine = (l) => {
+      orig(l);
+      if (l.includes('[固件]')) {
+        appendLog('[页面] 连接触发板子重启（USB 串口自动复位特性，~2s 自愈），补发状态探测');
+        setTimeout(sendProbes, 2600);
+        link.onLine = orig;
+      }
+    };
+  }
   $('btn-connect').disabled = true;
   $('btn-disconnect').disabled = false;
 }
@@ -418,6 +428,13 @@ async function doConnect() {
 }
 
 // ---- 事件 ----
+function sendProbes() {
+  link.send('wifi status');
+  link.send('time');
+  link.send('config show');
+  link.send('ota status');
+}
+
 $('btn-connect').addEventListener('click', doConnect);
 
 // 添加/换串口：走一次系统授权框（引导卡包裹），成功后立即连接
