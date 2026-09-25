@@ -3,178 +3,479 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>鲸屿 WhaleDock · 配网调机台</title>
-  <link rel="stylesheet" href="css/style.css?v=20260920f">
+  <title>鲸屿 WhaleDock · 控制台</title>
+  <link rel="stylesheet" href="css/style.css?v=20260926k">
+  <style>
+    /* ============ 布局编辑页签（三栏工作台，桌面语言局部样式） ============ */
+    #tab-layout { display: flex; gap: 16px; padding: 22px 24px 12px; align-items: flex-start; max-width: 1620px; margin: 0 auto; }
+
+    /* 左栏：图层 + 数据源 */
+    #tab-layout .ed-left { width: 240px; flex: none; display: flex; flex-direction: column; gap: 14px; }
+
+    /* 中栏：工作台（真机边框的设备画布直接坐在桌面上） */
+    #tab-layout .stage {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      padding: 4px 0 18px;
+    }
+    #tab-layout .toolbar {
+      width: 100%; max-width: 826px;
+      display: flex; gap: 6px; flex-wrap: wrap; align-items: center;
+      background: var(--paper); border-radius: 10px;
+      padding: 9px 12px;
+      box-shadow: 0 0 0 1px rgba(12,9,4,.5), 0 2px 5px rgba(0,0,0,.32), 0 18px 44px rgba(0,0,0,.3);
+    }
+    #tab-layout .toolbar .spacer { flex: 1; }
+    #tab-layout .toolbar #ed-msg { margin: 0; flex-basis: 100%; font-size: 12px; }
+
+    /* 设备画框：整机形态出场（深色边框 + 纸白屏幕 + 铭牌行） */
+    #tab-layout .device-frame {
+      background: linear-gradient(180deg, #2e2a21, #191510);
+      border-radius: 18px; padding: 13px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.65), 0 3px 8px rgba(0,0,0,.45),
+                  0 30px 70px rgba(0,0,0,.5), inset 0 1px 0 rgba(243,238,222,.08);
+    }
+    #tab-layout #holder {
+      position: relative; width: 800px; height: 480px;
+      background: #fbf9f1; border-radius: 4px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+    }
+    #tab-layout #screen { display: block; border-radius: 4px; }
+    #tab-layout .device-caption {
+      margin-top: 9px; text-align: center;
+      font: 10px/1 var(--mono); letter-spacing: .18em;
+      color: rgba(243,238,222,.42);
+    }
+    #tab-layout .slot-hit { position: absolute; border: 1px dashed transparent; cursor: move; }
+    #tab-layout .slot-hit:hover { border-color: rgba(179,56,44,.55); }
+    #tab-layout .slot-hit.sel { border: 1px solid var(--accent); background: rgba(179,56,44,.05); }
+
+    /* 右栏：属性 / 推送 / JSON 调试 */
+    #tab-layout .ed-right { width: 300px; flex: none; display: flex; flex-direction: column; gap: 14px; }
+
+    #tab-layout .layers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+    #tab-layout .layers li {
+      padding: 6px 11px; border: 1px solid var(--paper-line); border-radius: 6px; cursor: pointer;
+      display: flex; justify-content: space-between; align-items: center; font-size: 13px;
+      background: #fffdf4;
+    }
+    #tab-layout .layers li:hover { border-color: var(--ink); }
+    #tab-layout .layers li.sel { border-color: var(--accent); background: rgba(179,56,44,.07); box-shadow: inset 3px 0 0 var(--accent); }
+    #tab-layout .layers li .del { color: var(--dim); cursor: pointer; padding: 0 4px; }
+    #tab-layout .layers li .del:hover { color: var(--red); }
+
+    #tab-layout .prop-grid { display: grid; grid-template-columns: 72px 1fr; gap: 9px 10px; font-size: 13px; align-items: center; }
+    #tab-layout .prop-grid label { color: var(--dim); text-align: right; margin: 0; font-size: 12.5px; }
+    #tab-layout .prop-grid input[type=text], #tab-layout .prop-grid input[type=number], #tab-layout .prop-grid select {
+      width: 100%; padding: 5px 9px; margin-top: 0; font-size: 13px;
+    }
+    #tab-layout .ed-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    #tab-layout #prop-empty { margin: 2px 0 0; }
+    #tab-layout #props:not(:empty) + #prop-empty { display: none; }
+
+    /* 添加 widget / 数据源 下拉行 */
+    #tab-layout .add-bar { display: flex; gap: 6px; margin-top: 10px; }
+    #tab-layout .add-bar select { flex: 1; }
+
+    /* 数据源卡（协议 §5） */
+    #tab-layout .src-list { display: flex; flex-direction: column; gap: 8px; }
+    #tab-layout .src-item { border: 1px solid var(--paper-line); border-radius: 8px; padding: 9px;
+                            display: flex; flex-direction: column; gap: 6px; background: #fffdf4; }
+    #tab-layout .src-row { display: flex; gap: 6px; align-items: center; }
+    #tab-layout .src-row input { flex: 1; min-width: 0; }
+    #tab-layout .src-row select { width: 82px; flex: none; }
+    #tab-layout .src-row button { flex: none; padding: 4px 8px; }
+    #tab-layout .src-item input, #tab-layout .src-item select {
+      background: var(--well); color: var(--text); font-size: 12px; margin-top: 0;
+      border: 1px solid var(--paper-line); border-radius: 6px; padding: 5px 7px;
+    }
+
+    /* JSON 调试卡 */
+    #tab-layout #json {
+      width: 100%; box-sizing: border-box; resize: vertical; min-height: 120px; margin-top: 4px;
+      font: 12px/1.5 var(--mono);
+      background: var(--well); color: var(--text);
+      border: 1px solid var(--paper-line); border-radius: 8px; padding: 10px;
+    }
+    #tab-layout #verdict {
+      margin: 8px 0 0; max-height: 150px; overflow: auto;
+      background: var(--terminal); color: var(--terminal-text);
+      border-radius: 8px; padding: 9px 11px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.6);
+      font: 12px/1.5 var(--mono); white-space: pre-wrap; word-break: break-all;
+    }
+    #tab-layout #verdict:empty { display: none; }
+    #tab-layout .verdict.ok { color: #7fc9a0; }
+    #tab-layout .verdict.bad { color: #e2857b; }
+
+    /* Moveable 控制框主题化（墨黑手柄 + 屏红参考线） */
+    .moveable-control { background: var(--ink) !important; border: 2px solid var(--paper) !important;
+                        border-radius: 2px !important; width: 10px !important; height: 10px !important;
+                        margin-top: -6px !important; margin-left: -6px !important; }
+    .moveable-line { background: var(--accent) !important; }
+
+    @media (max-width: 1470px) {
+      #tab-layout { flex-direction: column; }
+      #tab-layout .stage { order: -1; width: 100%; overflow-x: auto; padding-bottom: 10px; }
+      #tab-layout .ed-left, #tab-layout .ed-right { width: 100%; }
+    }
+  </style>
 </head>
 <body>
-  <header>
-    <h1>鲸屿 WhaleDock <small>配网 · 调机台</small></h1>
-    <div class="header-right">
-      <span id="dev-time" class="dev-time">设备时间：—</span>
-      <button id="btn-time" class="ghost">刷新</button>
-      <div id="badge" class="badge off">设备未连接</div>
+
+<canvas class="whale-drift" id="driftWhale" aria-hidden="true"></canvas>
+
+<!-- ============ 顶栏：墨带（品牌 / 页签 / 设备状态） ============ -->
+<header class="mast">
+  <div class="brand">
+    <canvas id="brand-whale" width="34" height="30"></canvas>
+    <div>
+      <div class="brand-name">鲸屿控制台</div>
+      <div class="brand-sub">WHALEDOCK CONSOLE</div>
     </div>
-  </header>
+  </div>
+  <nav class="nav">
+    <button type="button" id="tab-layout-btn" class="tab on">▦&ensp;布局编辑</button>
+    <button type="button" id="tab-device-btn" class="tab">⚙&ensp;设备运维</button>
+    <a class="tab-link" href="simulator.html">协议模拟器 ↗</a>
+  </nav>
+  <div class="mast-status">
+    <span id="dev-time" class="dev-time">设备时间：—</span>
+    <button id="btn-time" class="ghost" title="向设备请求当前时间">刷新</button>
+    <button id="btn-tide" class="ghost" title="顶栏鲸影：开（52s 一渡）/ 频（26s）/ 关">鲸影·开</button>
+    <div id="badge" class="badge off">设备未连接</div>
+  </div>
+</header>
 
-  <main>
-    <!-- 仪表盘网格：控制卡 2×2 + 存储跨列，日志右区通栏（见 style.css 布局规则） -->
+<!-- ============ 页签一：布局编辑（三栏工作台） ============ -->
+<div id="tab-layout" class="tab-panel content">
+  <!-- 左栏：图层 + 数据源 -->
+  <div class="ed-left">
+    <section class="card">
+      <h2>图层 <span class="en">WIDGET</span></h2>
+      <ul id="layers" class="layers"></ul>
+      <div class="add-bar">
+        <select id="add-type">
+          <option value="clock">clock 时钟</option>
+          <option value="date">date 日期</option>
+          <option value="calendar">calendar 日历</option>
+          <option value="stats">stats 统计</option>
+          <option value="barChart">barChart 柱状图</option>
+          <option value="heatMap">heatMap 热力图</option>
+          <option value="repo">repo 仓库标识</option>
+          <option value="title">title 标题字标</option>
+          <option value="text">text 文字</option>
+          <option value="image">image 图片</option>
+        </select>
+        <button type="button" id="btn-add" class="flat">添加</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>数据源 <span class="en">DATA SOURCES</span></h2>
+      <div id="src-list" class="src-list"></div>
+      <div class="add-bar">
+        <select id="src-add-type">
+          <option value="github.user">github.user · 用户</option>
+          <option value="github.repo">github.repo · 仓库</option>
+        </select>
+        <button type="button" id="btn-src-add" class="flat">添加</button>
+      </div>
+      <p class="hint">整点流水按声明逐源拉数；挂件在属性面板绑定 source。</p>
+    </section>
+  </div>
 
-      <section class="card c-device">
-        <h2>设备连接</h2>
-        <p class="hint">首次使用点「添加串口…」，按引导选中 <b>USB 串行设备 (COM…)</b> 即可——授权<b>一生只需一次</b>。USB-C 插 DevKitC-1 标 "USB" 的口；连接前关闭占用串口的程序。</p>
-        <label id="port-area" hidden>已授权串口
-          <select id="port-select"></select>
-        </label>
+  <!-- 中栏：工作台 -->
+  <div class="stage">
+    <div class="toolbar">
+      <button type="button" id="btn-open">打开…</button>
+      <button type="button" id="btn-save">保存</button>
+      <button type="button" id="btn-export">导出 JSON</button>
+      <button type="button" id="btn-load-sample">示例</button>
+      <span class="spacer"></span>
+      <button type="button" id="btn-del" class="danger">删除选中</button>
+      <div id="ed-msg" class="hint"></div>
+    </div>
+    <div class="device-frame">
+      <div id="holder">
+        <canvas id="screen" width="800" height="480"></canvas>
+      </div>
+      <div class="device-caption"><span id="cap-state">沉睡中</span>&ensp;·&ensp;WHALEDOCK&ensp;·&ensp;7.5″ E-INK&ensp;·&ensp;800 × 480&ensp;·&ensp;BLACK / RED / YELLOW / PAPER</div>
+    </div>
+    <div class="inscription" aria-hidden="true">墨屏映沧海<i>·</i>潮汐工作站</div>
+
+    <section class="card">
+      <h2>JSON 调试 <span class="en">DEBUG</span></h2>
+      <div class="row" style="margin-top:0;align-items:center;gap:16px">
+        <label class="inline"><input type="checkbox" id="guides"> 槽位参考线</label>
+        <span id="data-state" class="hint" style="margin:0">演示数据</span>
+      </div>
+      <textarea id="json" rows="7" spellcheck="false"></textarea>
+      <pre id="verdict" class="fs-content verdict"></pre>
+      <div class="row">
+        <button type="button" id="btn-render" class="primary">校验并渲染</button>
+        <button type="button" id="btn-json-apply" class="flat">应用为当前布局…</button>
+        <button type="button" id="btn-json-load" class="flat">载入当前布局</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-sample" class="ghost">填充示例</button>
+        <button type="button" id="btn-live" class="ghost">联网拉数</button>
+        <button type="button" id="btn-demo" class="ghost">演示数据</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- 右栏：属性 / 推送 / JSON 调试 -->
+  <div class="ed-right">
+    <section class="card">
+      <h2>属性 <span class="en">PROPERTIES</span> <span id="prop-title">（未选中）</span></h2>
+      <div class="prop-grid" id="props"></div>
+      <p class="hint" id="prop-empty">在画布或左侧图层点选组件后，这里显示它的属性。</p>
+    </section>
+
+    <section class="card push-card">
+      <h2>推送上屏 <span class="en">PUSH</span></h2>
+      <div class="row" id="device-row" style="flex-direction:column;align-items:stretch;margin-top:0">
+        <input id="dev-addr" type="text" placeholder="设备地址（「USB 探测」自动填入 / IP / mDNS）">
+        <input id="dev-key" type="password" maxlength="6" placeholder="配对码（6 位）">
+        <div class="row" style="margin-top:0">
+          <button type="button" id="btn-probe" class="flat" title="经 USB 串口向设备发 ip 指令，取回 IP 与 mDNS 域名自动填入" style="flex:1">USB 探测</button>
+          <button type="button" id="btn-push" style="flex:1">推送上屏</button>
+        </div>
+      </div>
+      <div class="seal" id="push-seal" aria-hidden="true">已<br>上<br>屏</div>
+    </section>
+
+  </div>
+</div>
+
+<!-- ============ 页签二：设备运维（分区分栏运维台） ============ -->
+<main id="tab-device" class="tab-panel content" hidden>
+
+  <div class="zone z-a">01 · 通道 CHANNELS — 串口 / WI-FI / 局域网</div>
+
+  <section class="card c-device">
+    <h2>设备连接 <span class="en">SERIAL</span></h2>
+    <p class="hint">首次使用点「添加串口…」，按引导选中 <b>USB 串行设备 (COM…)</b> 即可——授权<b>一生只需一次</b>。USB-C 插 DevKitC-1 标 "USB" 的口；连接前关闭占用串口的程序。</p>
+    <label id="port-area" hidden>已授权串口
+      <select id="port-select"></select>
+    </label>
+    <div class="row">
+      <button id="btn-connect" class="primary">连接设备</button>
+      <button id="btn-port-add">添加串口…</button>
+      <button id="btn-disconnect" disabled>断开</button>
+      <button type="button" id="btn-reboot" class="ghost">重启</button>
+    </div>
+    <div id="pick-modal" class="modal" hidden>
+      <div class="modal-box">
+        <h3>浏览器串口授权（仅首次）</h3>
+        <p>点「继续」后，浏览器会弹出它自己的串口选择框：<br>选择名称为 <b>USB 串行设备 (COM…)</b> 的端口并点「连接」。<br>这是浏览器的安全机制，授权一次后本页将直接连接，不再出现。</p>
         <div class="row">
-          <button id="btn-connect" class="primary">连接设备</button>
-          <button id="btn-add">添加串口…</button>
-          <button id="btn-disconnect" disabled>断开</button>
-          <button type="button" id="btn-reboot" class="ghost">重启</button>
+          <button id="btn-pick-go" class="primary">继续</button>
+          <button id="btn-pick-cancel">取消</button>
         </div>
-        <div id="pick-modal" class="modal" hidden>
-          <div class="modal-box">
-            <h3>浏览器串口授权（仅首次）</h3>
-            <p>点「继续」后，浏览器会弹出它自己的串口选择框：<br>选择名称为 <b>USB 串行设备 (COM…)</b> 的端口并点「连接」。<br>这是浏览器的安全机制，授权一次后本页将直接连接，不再出现。</p>
-            <div class="row">
-              <button id="btn-pick-go" class="primary">继续</button>
-              <button id="btn-pick-cancel">取消</button>
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
+    </div>
+  </section>
 
-      <section class="card c-wifi">
-        <h2>Wi-Fi 配网</h2>
-        <div id="wifi-state" class="wifi-state">连接设备后显示凭据状态</div>
-        <form id="wifi-form">
-          <label>SSID（网络名，2.4GHz）
-            <input id="ssid" type="text" placeholder="例如 TP-LINK_5F2A" autocomplete="off" required>
-          </label>
-          <label>密码
-            <input id="pass" type="password" placeholder="WPA 密码，至少 8 位" autocomplete="off" minlength="8" required>
-          </label>
-          <label class="inline"><input id="show-pass" type="checkbox"> 显示密码</label>
-          <p class="hint">SSID / 密码暂不能包含英文逗号（串口 CLI 协议限制）。ESP32-S3 仅支持 2.4GHz。</p>
-          <div class="row">
-            <button type="submit" class="primary">保存并连接</button>
-            <button type="button" id="btn-status">状态查询</button>
-            <button type="button" id="btn-scan">扫描周边</button>
-            <button type="button" id="btn-clear" class="danger">清除凭据</button>
-          </div>
-        </form>
-        <div id="scan-list" class="scan-list"></div>
-      </section>
+  <section class="card c-wifi">
+    <h2>Wi-Fi 配网 <span class="en">PROVISION</span></h2>
+    <div id="wifi-state" class="wifi-state">海里还没有信号——插上 USB 连接设备后，这里显示凭据状态。</div>
+    <form id="wifi-form">
+      <label>SSID（网络名，2.4GHz）
+        <input id="ssid" type="text" placeholder="例如 TP-LINK_5F2A" autocomplete="off" required>
+      </label>
+      <label>密码
+        <input id="pass" type="password" placeholder="WPA 密码，至少 8 位" autocomplete="off" minlength="8" required>
+      </label>
+      <label class="inline"><input id="show-pass" type="checkbox"> 显示密码</label>
+      <p class="hint">SSID / 密码暂不能包含英文逗号（串口 CLI 协议限制）。ESP32-S3 仅支持 2.4GHz。</p>
+      <div class="row">
+        <button type="submit" class="primary">保存并连接</button>
+        <button type="button" id="btn-status">状态查询</button>
+        <button type="button" id="btn-scan">扫描周边</button>
+        <button type="button" id="btn-clear" class="danger">清除凭据</button>
+      </div>
+    </form>
+    <div id="scan-list" class="scan-list"></div>
+  </section>
 
-      <section class="card c-config">
-        <h2>数据源配置</h2>
-        <div id="cfg-state" class="wifi-state">连接设备后显示当前配置</div>
-        <form id="cfg-form">
-          <label>GitHub 用户 / 组织
-            <input id="cfg-user" type="text" placeholder="例如 datawhalechina" autocomplete="off">
-          </label>
-          <label>仓库（owner/repo，可粘贴完整地址）
-            <input id="cfg-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
-          </label>
-          <label>Token（可选，PAT，限额 60/h → 5000/h）
-            <input id="cfg-token" type="password" placeholder="留空 = 不修改；仅存设备，不回显" autocomplete="off">
-          </label>
-          <label class="inline"><input id="show-token" type="checkbox"> 显示 Token</label>
-          <p class="hint">留空的项不修改。配置持久化在设备上（LittleFS），整点流水线将按此自动拉取。</p>
-          <div class="row">
-            <button type="submit" class="primary">保存配置</button>
-            <button type="button" id="btn-pipe">立即拉取</button>
-            <button type="button" id="btn-cfg-clear-repo" class="danger">清除仓库</button>
-            <button type="button" id="btn-cfg-clear-token" class="danger">清除 Token</button>
-          </div>
-        </form>
-      </section>
+  <section class="card c-net">
+    <h2>局域网设备 <span class="en">HTTP</span><span id="net-badge" class="badge off">未连接</span></h2>
+    <p class="hint">串口之外的 Wi-Fi 直连通道（设备自动注册 <b>whaledock-xxxx.local</b>）。状态/流水/OTA/重启均可走网络；日志仍走串口。与串口通道互不干扰，<b>烧录/升级不再需要断开串口</b>。</p>
+    <div class="net-left">
+      <label>设备地址
+        <input id="net-host" type="text" placeholder="whaledock-xxxxxx.local 或 192.168.x.x" autocomplete="off">
+      </label>
+      <label>设备配对码
+        <input id="net-key" type="password" inputmode="numeric" maxlength="6" placeholder="6 位（设备串口输 key 查看）" autocomplete="off">
+      </label>
+      <div id="net-hint" class="hint" hidden></div>
+      <div class="row">
+        <button type="button" id="btn-net" class="primary">连接</button>
+        <button type="button" id="btn-net-off" disabled>断开</button>
+        <button type="button" id="btn-net-refresh" disabled>刷新</button>
+      </div>
+      <div class="row">
+        <button type="button" id="btn-net-pipe" disabled>立即拉取</button>
+        <button type="button" id="btn-net-demo" class="flat" disabled>推送测试图</button>
+        <button type="button" id="btn-net-ota" class="flat" disabled>升级到最新版</button>
+        <button type="button" id="btn-net-reboot" class="danger" disabled>重启…</button>
+      </div>
+    </div>
+    <div id="net-state" class="wifi-state">未连接</div>
+  </section>
 
-      <section class="card c-gh">
-        <h2>GitHub 数据</h2>
-        <label>用户 / 组织登录名
-          <input id="gh-user" type="text" placeholder="例如 torvalds 或 datawhalechina" autocomplete="off">
-        </label>
-        <div class="row">
-          <button type="button" id="btn-gh-user" class="primary">查询用户</button>
-        </div>
-        <label>仓库（owner/repo，可粘贴完整地址）
-          <input id="gh-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
-        </label>
-        <div class="row">
-          <button type="button" id="btn-gh-repo" class="primary">查询仓库</button>
-          <button type="button" id="btn-gh-commits">近 12 周提交</button>
-        </div>
-        <div id="gh-result" class="wifi-state">尚未查询</div>
-        <div id="gh-bars" class="bars"></div>
-      </section>
+  <div class="zone z-b">02 · 数据与固件 DATA &amp; FIRMWARE</div>
 
-      <section class="card c-ota">
-        <h2>固件升级（OTA）</h2>
-        <div id="ota-state" class="wifi-state">当前固件版本：连接后显示</div>
-        <label>固件 .bin 直链
-          <input id="ota-url" type="text" value="https://github.com/Lion-1209/WhaleDock-Project/releases/latest/download/firmware.bin" autocomplete="off">
-        </label>
-        <div class="row">
-          <button type="button" id="btn-ota" class="primary">开始升级</button>
-          <button type="button" id="btn-ota-confirm">确认新固件</button>
-          <button type="button" id="btn-ota-rollback" class="danger">回滚…</button>
-        </div>
-        <div class="progress"><div id="ota-progress"></div></div>
-        <p class="hint">写入备用分区 → 重启进入新固件 → 健康运行 90s 自动确认。下载/校验失败不影响当前固件。</p>
-      </section>
+  <section class="card c-config">
+    <h2>兜底数据配置 <span class="en">FALLBACK</span></h2>
+    <div id="cfg-state" class="wifi-state">连接设备后显示当前配置</div>
+    <form id="cfg-form">
+      <label>GitHub 用户 / 组织
+        <input id="cfg-user" type="text" placeholder="例如 datawhalechina" autocomplete="off">
+      </label>
+      <label>仓库（owner/repo，可粘贴完整地址）
+        <input id="cfg-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
+      </label>
+      <label>Token（可选，PAT，限额 60/h → 5000/h）
+        <input id="cfg-token" type="password" placeholder="留空 = 不修改；仅存设备，不回显" autocomplete="off">
+      </label>
+      <label class="inline"><input id="show-token" type="checkbox"> 显示 Token</label>
+      <p class="hint">布局未声明数据源时本卡生效；留空的项不修改。日常显示内容由「布局编辑 · 数据源」决定。</p>
+      <div class="row">
+        <button type="submit" class="primary">保存配置</button>
+        <button type="button" id="btn-pipe">立即拉取</button>
+        <button type="button" id="btn-cfg-clear-repo" class="danger">清除仓库</button>
+        <button type="button" id="btn-cfg-clear-token" class="danger">清除 Token</button>
+      </div>
+    </form>
+  </section>
 
-      <section class="card c-store">
-        <h2>存储（LittleFS）</h2>
-        <p class="hint">目录可点击进入，文件可点击查看内容（config.json / cache/*.json）。</p>
-        <div id="fs-list" class="scan-list"></div>
-        <pre id="fs-content" class="fs-content"></pre>
-        <div class="row">
-          <button type="button" id="btn-fs-refresh" class="primary">刷新文件列表</button>
-          <button type="button" id="btn-fs-format" class="danger">格式化…</button>
-        </div>
-      </section>
+  <section class="card c-gh">
+    <h2>GitHub 数据 <span class="en">GITHUB</span></h2>
+    <label>用户 / 组织登录名
+      <input id="gh-user" type="text" placeholder="例如 torvalds 或 datawhalechina" autocomplete="off">
+    </label>
+    <div class="row">
+      <button type="button" id="btn-gh-user" class="primary">查询用户</button>
+    </div>
+    <label>仓库（owner/repo，可粘贴完整地址）
+      <input id="gh-repo" type="text" placeholder="例如 datawhalechina/leeml-notes" autocomplete="off">
+    </label>
+    <div class="row">
+      <button type="button" id="btn-gh-repo" class="primary">查询仓库</button>
+      <button type="button" id="btn-gh-commits">近 12 周提交</button>
+    </div>
+    <div id="gh-result" class="wifi-state">尚未查询</div>
+    <div id="gh-bars" class="bars"></div>
+  </section>
 
-      <section class="card c-net">
-        <h2>局域网设备（HTTP）<span id="net-badge" class="badge off">未连接</span></h2>
-        <p class="hint">串口之外的 Wi-Fi 直连通道（设备自动注册 <b>whaledock-xxxx.local</b>）。状态/流水/OTA/重启均可走网络；日志仍走串口。与串口通道互不干扰，<b>烧录/升级不再需要断开串口</b>。</p>
-        <div class="net-left">
-          <label>设备地址
-            <input id="net-host" type="text" placeholder="whaledock-xxxxxx.local 或 192.168.x.x" autocomplete="off">
-          </label>
-          <label>设备配对码
-            <input id="net-key" type="password" inputmode="numeric" maxlength="6" placeholder="6 位（设备串口输 key 查看）" autocomplete="off">
-          </label>
-          <div id="net-hint" class="hint" hidden></div>
-          <div class="row">
-            <button type="button" id="btn-net" class="primary">连接</button>
-            <button type="button" id="btn-net-off" disabled>断开</button>
-            <button type="button" id="btn-net-refresh" disabled>刷新</button>
-          </div>
-          <div class="row">
-            <button type="button" id="btn-net-pipe" disabled>立即拉取</button>
-            <button type="button" id="btn-net-demo" class="flat" disabled>推送测试图</button>
-            <button type="button" id="btn-net-ota" class="flat" disabled>升级到最新版</button>
-            <button type="button" id="btn-net-reboot" class="danger" disabled>重启…</button>
-          </div>
-        </div>
-        <div class="net-right">
-          <div id="net-state" class="wifi-state">未连接</div>
-        </div>
-      </section>
+  <section class="card c-ota">
+    <h2>固件升级 <span class="en">OTA</span></h2>
+    <div id="ota-state" class="wifi-state">当前固件版本：连接后显示</div>
+    <label>固件 .bin 直链
+      <input id="ota-url" type="text" value="https://github.com/Lion-1209/WhaleDock-Project/releases/latest/download/firmware.bin" autocomplete="off">
+    </label>
+    <div class="row">
+      <button type="button" id="btn-ota" class="primary">开始升级</button>
+      <button type="button" id="btn-ota-confirm">确认新固件</button>
+      <button type="button" id="btn-ota-rollback" class="danger">回滚…</button>
+    </div>
+    <div class="progress"><div id="ota-progress"></div></div>
+    <p class="hint">写入备用分区 → 重启进入新固件 → 健康运行 90s 自动确认。下载/校验失败不影响当前固件。</p>
+  </section>
 
-    <section class="card c-log log-card">
-        <h2>设备日志<button type="button" id="btn-log-clear" class="ghost">清空</button></h2>
-        <div id="log" class="log"></div>
-        <div class="row cmd-row">
-          <input id="cmd" type="text" placeholder="输入命令发送到设备，如 help / gh user torvalds，回车发送" autocomplete="off">
-          <button id="btn-send">发送</button>
-          <label class="inline"><input id="autoscroll" type="checkbox" checked> 自动滚动</label>
-        </div>
-      </section>
-  </main>
+  <section class="card c-store">
+    <h2>存储 <span class="en">LITTLEFS</span></h2>
+    <p class="hint">目录可点击进入，文件可点击查看内容（config.json / cache/*.json）。</p>
+    <div id="fs-list" class="scan-list"></div>
+    <pre id="fs-content" class="fs-content"></pre>
+    <div class="row">
+      <button type="button" id="btn-fs-refresh" class="primary">刷新文件列表</button>
+      <button type="button" id="btn-fs-format" class="danger">格式化…</button>
+    </div>
+  </section>
 
-  <footer>零后端 · Web Serial 直连 · 协议为固件串口 CLI（services/cli）</footer>
+  <section class="card c-log log-card">
+    <h2>设备日志 <span class="en">DEVICE LOG</span><button type="button" id="btn-log-clear" class="ghost">清空</button></h2>
+    <div id="log" class="log"></div>
+    <div class="row cmd-row">
+      <input id="cmd" type="text" placeholder="输入命令发送到设备，如 help / gh user torvalds，回车发送" autocomplete="off">
+      <button id="btn-send">发送</button>
+      <label class="inline"><input id="autoscroll" type="checkbox" checked> 自动滚动</label>
+    </div>
+  </section>
+</main>
 
-  <script type="module" src="js/app.js?v=20260923c"></script>
+<footer>零后端 · WEB SERIAL / 局域网 HTTP 双通道 · 显示协议 V1.2 · 布局编辑 D3 · <b style="color:rgba(243,238,222,.6)">UI v20260926k</b></footer>
+
+<!-- 页签切换（hash 记忆：#layout / #device） -->
+<script>
+  (function () {
+    const show = (name) => {
+      const isLayout = name !== 'device';
+      document.getElementById('tab-layout').hidden = !isLayout;
+      document.getElementById('tab-device').hidden = isLayout;
+      document.getElementById('tab-layout-btn').classList.toggle('on', isLayout);
+      document.getElementById('tab-device-btn').classList.toggle('on', !isLayout);
+      if (isLayout && window.__editorOnTabShow) window.__editorOnTabShow();
+    };
+    const apply = () => show((location.hash || '#layout').replace('#', ''));
+    window.addEventListener('hashchange', apply);
+    document.getElementById('tab-layout-btn').addEventListener('click', () => { location.hash = 'layout'; });
+    document.getElementById('tab-device-btn').addEventListener('click', () => { location.hash = 'device'; });
+    apply();
+  })();
+</script>
+
+<!-- Moveable：拖拽/缩放交互层（MIT，唯一外部依赖，自托管兜底见 README） -->
+<script src="vendor/moveable.min.js"></script>
+
+<script src="js/title_art.js?v=20260924c"></script>
+<script src="js/whale_art.js?v=20260924"></script>
+<script>
+  // 鲸鱼 1bpp 位图（whale_pixel，220×192，与设备同源）：通用点绘助手
+  // __drawWhaleAt(g, x, y, scale, color) 画到任意 2d 上下文；__drawWhale 整卡封装
+  window.__drawWhaleAt = function (g, x, y, scale, color) {
+    const art = window.WHALE_ART;
+    if (!art) return;
+    const b = Uint8Array.from(atob(art.data), (ch) => ch.charCodeAt(0));
+    const stride = (art.w + 7) >> 3;
+    g.fillStyle = color;
+    for (let yy = 0; yy < art.h; yy++)
+      for (let xx = 0; xx < art.w; xx++)
+        if (b[yy * stride + (xx >> 3)] & (0x80 >> (xx & 7)))
+          g.fillRect(x + Math.floor(xx * scale), y + Math.floor(yy * scale),
+                     Math.max(1, Math.ceil(scale)), Math.max(1, Math.ceil(scale)));
+  };
+  window.__drawWhale = function (canvas, scale, color) {
+    canvas.width = Math.ceil(220 * scale); canvas.height = Math.ceil(192 * scale);
+    window.__drawWhaleAt(canvas.getContext('2d'), 0, 0, scale, color);
+  };
+  // 顶栏品牌位：墨带上以纸色点绘（墨的负片）
+  window.__drawWhale(document.getElementById('brand-whale'), 34 / 220, '#f2edda');
+  // 鲸影穿行（潮汐）：默认 rare 52s 一渡，可切 often/off；reduced-motion 由 CSS 静默
+  (function () {
+    const btn = document.getElementById('btn-tide');
+    const w = document.getElementById('driftWhale');
+    if (!btn || !w) return;
+    window.__drawWhale(w, 0.5, 'rgba(35,34,28,.9)');
+    const apply = () => {
+      const mode = localStorage.getItem('whaledock.tide') || 'rare';
+      btn.textContent = '鲸影·' + (mode === 'off' ? '关' : mode === 'often' ? '频' : '开');
+      w.style.display = mode === 'off' ? 'none' : '';
+      w.style.animationDuration = mode === 'often' ? '26s' : '52s';
+    };
+    btn.addEventListener('click', () => {
+      const cur = localStorage.getItem('whaledock.tide') || 'rare';
+      localStorage.setItem('whaledock.tide', cur === 'rare' ? 'off' : cur === 'off' ? 'often' : 'rare');
+      apply();
+    });
+    apply();
+  })();
+</script>
+<script src="js/sim.js?v=20260926c"></script>
+<script src="js/editor.js?v=20260926i"></script>
+<script type="module" src="js/app.js?v=20260925d"></script>
 </body>
 </html>

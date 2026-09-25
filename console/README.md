@@ -1,16 +1,31 @@
 # console/ · Web 上位机
 
-零后端、零构建：纯静态文件，双通道直连设备——浏览器经 **Web Serial** 走串口（协议为固件 CLI，`firmware/src/services/cli`），或经设备自建 **HTTP API + mDNS** 走局域网（`firmware/src/services/webapi`）。当前功能（8 卡工作台）：
+零后端、零构建：纯静态文件，双通道直连设备——浏览器经 **Web Serial** 走串口（协议为固件 CLI，`firmware/src/services/cli`），或经设备自建 **HTTP API + mDNS** 走局域网（`firmware/src/services/webapi`）。
+
+界面设计语言「桌面」：控制台长成设备周围的那张桌子——深墨桌面（机身边框同族暖黑）上摆纸白面板，取色自 7.5″ 四色墨水屏（纸白/墨黑/屏红/屏黄：红只做印章式强调与数据色，黄做焦点环）；标题走衬线印刷字配等宽英文副标，地址/日志/JSON 走等宽字，设备画布以真机边框形态出场（设计系统集中在 `css/style.css`，类名契约与 `js/` 解耦）。
+
+入口 [`index.html`](./index.html) = 统一控制台（双页签）：
+
+**页签一 · 布局编辑**（原独立编辑器并入，`editor.html` 已重定向至此）
+
+- 拖拽排版（移动/边角缩放写回 slotRect）、图层管理、按类型属性编辑
+- 数据源卡：声明布局 dataSources（id/类型/参数固定格式，id 改名级联、被引用禁删），挂件 `source` 下拉绑定——整点流水按声明逐源拉数（协议 §5）
+- 图片导入（Bayer/Otsu 二值化）、中文字库子集自动生成、布局打开/保存/自动存档
+- USB 探测（串口取 IP/mDNS）+ 一键推送上屏（HTTP API）
+- JSON 调试卡：粘贴协议 JSON → 与固件同源校验 → 四色渲染（与编辑文档互转）
+
+**页签二 · 设备运维**（原 8 卡调机台并入）
 
 - **设备**：连接管理（授权一次后页内直连）、设备时间、重启
 - **Wi-Fi**：表单配网、凭据状态、周边 AP 扫描（点击回填 SSID）、清除凭据
-- **数据源**：GitHub 用户/仓库/Token 配置（存设备 LittleFS，Token 不回显）、立即拉取
+- **兜底数据配置**：GitHub 用户/仓库/Token 设备级配置（布局未声明数据源时生效；Token 仅此处可配）、立即拉取
 - **GitHub**：用户/仓库查询、近 12 周提交柱状图
 - **OTA**：固件直链升级（默认 GitHub Release 最新版）、进度条、确认/回滚
 - **存储**：LittleFS 文件浏览、内容查看、格式化
 - **局域网**：mDNS 名或 IP 直连，状态轮询/流水/OTA/重启全网络操作（日志仍走串口）
 - **日志**：实时串口日志（自动滚动）、自由命令输入
-- **显示协议 v1 模拟器**：[`simulator.html`](./simulator.html) —— 粘贴布局 JSON，800×480 四色预览 + 与固件同源的协议校验（`docs/显示协议-v1.md`）；默认示例 = 概念图 v2 屏幕版式 1:1 复刻（鲸鱼为 datawhalelogo.png 转 1bpp 位图，协议 `image` 通道内联）
+
+**开发用**：显示协议模拟器 [`simulator.html`](./simulator.html) —— 协议联调独立页（编辑器与模拟器共享 `js/sim.js` 渲染/校验内核）
 
 ## 像素资源提取（tools/pixelize.html）
 

@@ -20,7 +20,7 @@ const STATE_TEXT = {
   off: '设备未连接',
   unprovisioned: '未配网',
   connecting: '连接中…',
-  connected: '已连接',
+  connected: '潮位 · 在线',
   retrying: '断开 · 重连中',
 };
 let deviceState = 'off';
@@ -28,8 +28,12 @@ const wifi = { saved: '', ip: '' };
 
 function setState(s) {
   deviceState = s;
-  $('badge').textContent = s === 'connected' && wifi.ip ? `已连接 ${wifi.ip}` : STATE_TEXT[s];
+  $('badge').textContent = s === 'connected' && wifi.ip ? `潮位 · 在线 ${wifi.ip}` : STATE_TEXT[s];
   $('badge').className = 'badge ' + s;
+  // 岛灯：设备在线 → 设备框晕光 + 铭牌唤醒（潮汐，纯装饰联动）
+  document.body.classList.toggle('device-alive', s === 'connected');
+  const cap = document.getElementById('cap-state');
+  if (cap) cap.textContent = s === 'connected' ? '在线' : s === 'connecting' ? '唤醒中' : '沉睡中';
   renderWifiState();
 }
 
@@ -37,7 +41,7 @@ function setState(s) {
 function renderWifiState() {
   const el = $('wifi-state');
   if (deviceState === 'off') {
-    el.textContent = '连接设备后显示凭据状态';
+    el.textContent = '海里还没有信号——插上 USB 连接设备后，这里显示凭据状态。';
     el.className = 'wifi-state';
     return;
   }
@@ -417,7 +421,7 @@ async function doConnect() {
 $('btn-connect').addEventListener('click', doConnect);
 
 // 添加/换串口：走一次系统授权框（引导卡包裹），成功后立即连接
-$('btn-add').addEventListener('click', async () => {
+$('btn-port-add').addEventListener('click', async () => {
   if (!SerialLink.supported()) return;
   try {
     await pickAndConnect();

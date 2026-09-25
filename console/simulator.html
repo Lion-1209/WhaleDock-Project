@@ -5,82 +5,129 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>鲸屿 WhaleDock · 显示协议 v1 模拟器</title>
   <style>
+    /* 「桌面」语言（与 css/style.css 同源的自包含版） */
     :root {
-      --bg: #0f1419; --card: #1a2129; --border: #2a3542;
-      --text: #d8e1ea; --dim: #8a99a8; --accent: #4da3ff; --teal: #39c5cf;
+      --desk-hi: #2a251c; --desk-lo: #1b1712;
+      --dark-dim: #a89f8a; --dark-line: rgba(243, 238, 222, .13);
+      --paper: #f7f3e8; --well: #f0ebdc; --paper-line: #d8d1bb;
+      --ink: #211d15; --text: #211d15; --dim: #7c7563;
+      --accent: #b3382c; --red: #b3382c; --red-deep: #8f2a20;
+      --yellow: #d4a017; --green: #3d7a58;
+      --terminal: #16130d; --terminal-text: #ddd5bf;
+      --mono: "Cascadia Mono", Consolas, "Courier New", monospace;
+      --serif: Georgia, "Times New Roman", "STZhongsong", "SimSun", "Songti SC", "Noto Serif CJK SC", serif;
+      color-scheme: light;
     }
     * { box-sizing: border-box; }
     body {
-      margin: 0; background: var(--bg); color: var(--text);
-      font: 15px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      margin: 0; color: var(--text);
+      font: 15px/1.65 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+      background:
+        radial-gradient(rgba(243, 238, 222, .045) 1px, transparent 1px) 0 0 / 26px 26px,
+        linear-gradient(180deg, var(--desk-hi), var(--desk-lo));
+      background-attachment: fixed;
+      min-height: 100vh;
     }
+    ::selection { background: var(--yellow); color: var(--ink); }
+
     header {
       position: sticky; top: 0; z-index: 5;
       display: flex; align-items: center; justify-content: space-between;
-      flex-wrap: wrap; gap: 6px 12px;
-      padding: 12px 20px; border-bottom: 1px solid var(--border);
-      background: rgba(15, 20, 25, 0.92); backdrop-filter: blur(6px);
+      flex-wrap: wrap; gap: 8px 18px;
+      padding: 12px 26px;
+      background: linear-gradient(180deg, #191510, #141109);
+      border-bottom: 1px solid #0b0906;
+      box-shadow: 0 1px 0 rgba(243, 238, 222, .07) inset, 0 8px 24px rgba(0, 0, 0, .35);
     }
-    h1 { font-size: 18px; margin: 0; }
-    h1 small { color: var(--dim); font-weight: 400; margin-left: 8px; }
-    h1 a { color: var(--accent); text-decoration: none; font-size: 13px; margin-left: 12px; }
-    h2 { font-size: 15px; font-weight: 600; margin: 0 0 10px;
-         padding-left: 9px; border-left: 3px solid var(--border); }
-    .wrap { display: flex; gap: 16px; padding: 16px 20px 32px; align-items: flex-start; flex-wrap: wrap; }
-    .panel { background: var(--card); border: 1px solid var(--border);
-             border-radius: 10px; padding: 14px 16px; }
-    .left { flex: 1 1 380px; min-width: 320px; display: flex; flex-direction: column; gap: 12px; }
-    .right { flex: 1 1 auto; min-width: 0; }
+    h1 { display: flex; align-items: baseline; gap: 12px; margin: 0; }
+    h1 .t { font: 700 18px/1.3 var(--serif); color: #f2edda; letter-spacing: 1px; }
+    h1 small { font: 500 10px/1 var(--mono); color: var(--dark-dim); letter-spacing: .26em; }
+    h1 a { color: #e06a5c; text-decoration: none; font-size: 13px; margin-left: 6px; }
+    h1 a:hover { color: #f2edda; }
+    .legend { display: flex; gap: 16px; color: var(--dark-dim); font: 11.5px/1 var(--mono); letter-spacing: .06em; }
+    .legend i { display: inline-block; width: 10px; height: 10px;
+                border-radius: 2px; margin-right: 5px; vertical-align: -1px;
+                box-shadow: 0 0 0 1px rgba(0, 0, 0, .5); }
+
+    .wrap { display: flex; gap: 16px; padding: 22px 24px 34px; align-items: flex-start; flex-wrap: wrap; max-width: 1620px; margin: 0 auto; }
+    .panel {
+      background: var(--paper); border-radius: 10px; padding: 16px 18px 15px;
+      box-shadow: 0 0 0 1px rgba(12, 9, 4, .5), 0 2px 5px rgba(0, 0, 0, .32), 0 18px 44px rgba(0, 0, 0, .3);
+    }
+    h2 { display: flex; align-items: center; gap: 9px;
+         font: 700 15.5px/1.35 var(--serif); letter-spacing: .03em;
+         margin: 0 0 12px; }
+    h2::before { content: ''; width: 7px; height: 7px; background: var(--accent); flex: none; }
+    .left { flex: 1 1 380px; min-width: 320px; display: flex; flex-direction: column; gap: 14px; }
+    .right { flex: 1 1 auto; min-width: 0; display: flex; }
+
     textarea {
-      width: 100%; height: 260px; padding: 10px; resize: vertical;
-      background: #0b0f13; color: var(--text);
-      border: 1px solid var(--border); border-radius: 6px;
-      font: 12.5px/1.5 Consolas, "Cascadia Mono", monospace;
+      width: 100%; height: 260px; padding: 10px 12px; resize: vertical;
+      background: var(--well); color: var(--text);
+      border: 1px solid var(--paper-line); border-radius: 8px;
+      font: 12.5px/1.55 var(--mono);
     }
+    textarea:focus { outline: 2px solid rgba(212, 160, 23, .55); border-color: var(--ink); }
     .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
     button {
-      padding: 7px 14px; background: #243040; color: var(--text);
-      border: 1px solid var(--border); border-radius: 6px;
+      padding: 7px 15px; background: var(--paper); color: var(--text);
+      border: 1px solid #c3bca6; border-radius: 6px;
       font-size: 13.5px; cursor: pointer;
+      transition: border-color .12s, background .12s;
     }
-    button:hover:not(:disabled) { border-color: var(--accent); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
-    button.primary { background: var(--accent); border-color: var(--accent);
-                     color: #08131f; font-weight: 600; }
-    .hint { color: var(--dim); font-size: 13px; margin: 6px 0 0; }
-    .verdict { font-size: 13.5px; padding: 8px 12px; border-radius: 6px;
-               background: var(--bg); border: 1px dashed var(--border);
-               color: var(--dim); white-space: pre-wrap; max-height: 180px; overflow-y: auto; }
-    .verdict.ok { color: #3ecf8e; border-color: #3ecf8e; }
-    .verdict.bad { color: #ff6b6b; border-color: #ff6b6b; }
-    .stage { display: flex; flex-direction: column; gap: 10px; align-items: center; }
-    canvas { background: #f5f4ef; border-radius: 4px;
-             box-shadow: 0 6px 24px rgba(0,0,0,0.45); max-width: 100%; }
+    button:hover:not(:disabled) { border-color: var(--ink); background: #fffdf4; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: var(--ink); border-color: var(--ink); color: var(--paper); font-weight: 600; }
+    button.primary:hover:not(:disabled) { background: #000; }
+    .hint { color: var(--dim); font-size: 12.5px; margin: 6px 0 0; line-height: 1.6; }
+
+    .verdict {
+      font: 12.5px/1.55 var(--mono);
+      padding: 10px 12px; border-radius: 8px;
+      background: var(--terminal); color: var(--terminal-text);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, .6);
+      white-space: pre-wrap; max-height: 180px; overflow-y: auto;
+    }
+    .verdict.ok { color: #7fc9a0; }
+    .verdict.bad { color: #e2857b; }
+
+    .stage { flex: 1; display: flex; flex-direction: column; gap: 10px; align-items: center; width: 100%; }
+    .device-frame {
+      background: linear-gradient(180deg, #2e2a21, #191510);
+      border-radius: 18px; padding: 13px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.65), 0 3px 8px rgba(0,0,0,.45),
+                  0 30px 70px rgba(0,0,0,.5), inset 0 1px 0 rgba(243,238,222,.08);
+    }
+    canvas { display: block; background: #fbf9f1; border-radius: 4px;
+             box-shadow: 0 0 0 1px rgba(0,0,0,.35); max-width: 100%; }
+    .device-caption {
+      margin-top: 9px; text-align: center;
+      font: 10px/1 var(--mono); letter-spacing: .18em;
+      color: rgba(243, 238, 222, .42);
+    }
     label.inline { display: inline-flex; align-items: center; gap: 6px;
                    color: var(--dim); font-size: 13px; }
-    .legend { display: flex; gap: 14px; color: var(--dim); font-size: 12.5px; }
-    .legend i { display: inline-block; width: 10px; height: 10px;
-                border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    input[type="checkbox"] { accent-color: var(--accent); }
   </style>
 </head>
 <body>
   <header>
-    <h1>显示协议 v1 模拟器 <small>800×480 四色 · 与固件校验规则同源</small><a href="./">← 配网调机台</a></h1>
+    <h1><span class="t">显示协议模拟器</span><small>PROTOCOL V1 · 800×480 · 与固件校验同源</small><a href="./">← 控制台</a></h1>
     <div class="legend">
-      <span><i style="background:#1c1c1c"></i>黑 black</span>
-      <span><i style="background:#b3382c"></i>红 red（&lt;5%）</span>
-      <span><i style="background:#d4a017"></i>黄 yellow</span>
+      <span><i style="background:#1c1c1c"></i>black 黑</span>
+      <span><i style="background:#b3382c"></i>red 红（&lt;5%）</span>
+      <span><i style="background:#d4a017"></i>yellow 黄</span>
     </div>
   </header>
 
   <div class="wrap">
     <div class="left">
       <section class="panel">
-        <h2>布局 JSON（协议 v1）</h2>
+        <h2>布局 JSON（协议 V1）</h2>
         <textarea id="json" spellcheck="false" placeholder="粘贴布局 JSON，或点「加载协议示例」"></textarea>
         <div class="row">
           <button id="btn-render" class="primary">校验并渲染</button>
-          <button id="btn-sample">加载概念图示例</button>
+          <button id="btn-sample">加载协议示例</button>
         </div>
       </section>
 
@@ -100,11 +147,13 @@
     </div>
 
     <div class="right">
-      <section class="panel stage">
-        <h2 style="align-self:flex-start">屏幕预览</h2>
-        <canvas id="screen" width="800" height="480"></canvas>
+      <section class="stage">
+        <div class="device-frame">
+          <canvas id="screen" width="800" height="480"></canvas>
+          <div class="device-caption">WHALEDOCK&ensp;·&ensp;7.5″ E-INK&ensp;·&ensp;800 × 480&ensp;·&ensp;BLACK / RED / YELLOW / PAPER</div>
+        </div>
         <label class="inline"><input id="guides" type="checkbox"> 显示槽位参考线</label>
-        <p class="hint">预览即固件渲染目标的 1:1 逼近（黑白红黄四色）；设备侧文本用 u8g2 字库子集，模拟器用系统字体近似。</p>
+        <p class="hint" style="max-width:560px;text-align:center">预览即固件渲染目标的 1:1 逼近（黑白红黄四色）；设备侧文本用 u8g2 字库子集，模拟器用系统字体近似。</p>
       </section>
     </div>
   </div>

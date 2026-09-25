@@ -20,6 +20,33 @@ function defaultDoc() {
 function paint() {
   if (!doc) return;
   try { render(doc); } catch (e) { msg('渲染异常：' + e.message); }
+  // 空海（潮汐）：无挂件 = 鲸影在屏中缓游 + 题句
+  if (doc.layout.widgets.length === 0) startEmptySea();
+  else stopEmptySea();
+}
+
+let seaRaf = 0;
+function stopEmptySea() {
+  if (seaRaf) cancelAnimationFrame(seaRaf);
+  seaRaf = 0;
+}
+function startEmptySea() {
+  const c = $e('screen'), g = c.getContext('2d');
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const step = () => {
+    g.fillStyle = '#f5f4ef';
+    g.fillRect(0, 0, c.width, c.height);
+    const dx = reduce ? 0 : Math.sin(performance.now() / 1000 * 2 * Math.PI / 7) * 10;
+    window.__drawWhaleAt && __drawWhaleAt(g, c.width / 2 - 61 + dx, c.height / 2 - 53,
+                                         0.55, 'rgba(35, 34, 28, .5)');
+    g.fillStyle = 'rgba(35, 34, 28, .45)';
+    g.font = '13px Georgia, "Microsoft YaHei", serif';
+    g.textAlign = 'center';
+    g.fillText('海域空空如也，拖一个挂件上岛。', c.width / 2, c.height / 2 + 78);
+    if (!reduce) seaRaf = requestAnimationFrame(step);
+  };
+  stopEmptySea();
+  step();
 }
 
 // ---- slot 覆盖 div + Moveable ----
@@ -741,14 +768,28 @@ $e('btn-push').addEventListener('click', async () => {
     const out = await res.json();
     if (out.ok) {
       msg(`✓ ${out.msg}（widgets ${out.widgets} · 数据源 ${out.sources}）`);
+      stampSeal(true);   // 印章确认（潮汐）：成功盖「已上屏」屏红印
     } else {
       msg('✗ 设备校验未通过：\n' + (out.errors || [out.msg || res.status]).join('\n'));
+      stampSeal(false);
     }
   } catch (e) {
     msg('推送失败：' + e.message +
         '（检查设备地址/同一局域网/配对码；线上版页面推局域网设备需浏览器允许本地网络访问）');
+    stampSeal(false);
   }
 });
+
+// 盖印：成功 = 屏红「已上屏」；失败 = 墨黑「未上屏」（潮汐）
+function stampSeal(ok) {
+  const seal = $e('push-seal');
+  if (!seal) return;
+  seal.classList.remove('show', 'fail');
+  seal.innerHTML = ok ? '已<br>上<br>屏' : '未<br>上<br>屏';
+  if (!ok) seal.classList.add('fail');
+  void seal.offsetWidth;  // 重启动画
+  seal.classList.add('show');
+}
 
 // ---- 图片导入：文件 → 缩放（守协议附录 B 单资源 16KB 预算）→ Bayer 抖动/Otsu
 // 阈值二值化 → 1bpp MSB-first 内联资源（协议：黑白图抖动由编辑器完成） ----
@@ -847,3 +888,15 @@ if (!restoreAutosave()) {
 } else {
   msg('已恢复上次编辑的布局（自动存档）；「加载示例布局」可重置');
 }
+
+// ---- JSON 调试卡：与编辑文档互转（sim.js 的渲染/校验按钮在卡内自 bind）----
+$e('btn-json-load').addEventListener('click', () => {
+  $e('json').value = JSON.stringify(doc, null, 2);
+  msg('已将当前编辑布局载入 JSON 调试区');
+});
+$e('btn-json-apply').addEventListener('click', () => {
+  if (loadLayoutFromText($e('json').value)) msg('已应用为当前编辑布局（校验通过）');
+});
+
+// 统一控制台切回布局页签时同步 Moveable 控制框（隐藏期间几何可能过期）
+window.__editorOnTabShow = () => { if (mv) mv.updateRect(); };
