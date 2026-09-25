@@ -59,8 +59,13 @@ CheckResult check(const String& json) {
   if (res.isNull() || res.size() != 2 || res[0] != 800 || res[1] != 480)
     r.errors += "规则3: resolution 必须为 [800,480]\n";
 
-  // 数据源 id 集合（规则 6 用）
+  // 数据源 id 集合（规则 6 用）+ 字库 id 集合（规则 6：text/ticker 的 font 引用）
   std::vector<String> sourceIds;
+  std::vector<String> fontIds;
+  for (JsonObject f : doc["fonts"].as<JsonArray>()) {
+    if (f["id"].is<const char*>()) fontIds.push_back(f["id"].as<String>());
+    else r.errors += "规则6: fonts 存在无 id 项\n";
+  }
   for (JsonObject ds : doc["dataSources"].as<JsonArray>()) {
     if (ds["id"].is<const char*>()) sourceIds.push_back(ds["id"].as<String>());
     else r.errors += "规则6: dataSources 存在无 id 项\n";
@@ -119,6 +124,13 @@ CheckResult check(const String& json) {
           for (const String& s : sourceIds) found |= (s == src);
           if (!found) r.errors += String("规则6: source '") + src + "' 未在 dataSources 声明\n";
         }
+      }
+      // 字库引用（规则 6：fonts[].id；缺字由编辑器按用字生成保证）
+      if (w["font"].is<const char*>()) {
+        const char* fid = w["font"];
+        bool found = false;
+        for (const String& f : fontIds) found |= (f == fid);
+        if (!found) r.errors += String("规则6: font '") + fid + "' 未在 fonts 声明\n";
       }
       // 字段白名单（规则 8）
       if (!strcmp(type, "stats")) {

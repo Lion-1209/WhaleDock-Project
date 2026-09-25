@@ -453,6 +453,11 @@ $e('btn-export').addEventListener('click', () => {
   msg(`校验通过 ✓ 已下载 layout.json（${json.length}B${dev.resources.length ? `，含 ${dev.resources.length} 内联资源` : ''}）`);
 });
 
+// ---- 中文字库子集（协议 §6）----
+// 打包器 buildFontSubset / FONT_CELL / b64Of 定义已迁至 sim.js：
+// 预览与设备共用一份位图（drawCnText 同算法绘制），编辑器此处仅按
+// prepareForDevice 收集用字并引用，保证推送内容与预览所见一致。
+
 // ---- 设备交付准备：自定义标题文字 → 栅格化 1bpp 内联资源 ----
 // 预览端用斜体字体实时渲染，设备端没有艺术字体——导出/推送前把自定义文字
 // 按标题槽 2x 渲染、50% 阈值二值化、MSB-first 打包为资源，title.resBW 指向之
@@ -488,6 +493,7 @@ function rasterizeTitle(w) {
 function prepareForDevice(src) {
   const out = JSON.parse(JSON.stringify(src));
   out.resources = (out.resources || []).filter((r) => !/^title_raster/.test(r.id));
+  out.fonts = [];  // 中文字库子集按需重建（协议 §6）
   let n = 0;
   for (const w of out.layout.widgets) {
     if (w.type === 'title' && w.text && w.text !== 'Whale-Dock') {
@@ -497,6 +503,22 @@ function prepareForDevice(src) {
       w.resBW = res.id;
     } else if (w.type === 'title') {
       delete w.resBW;  // 默认文字走固件内置位图
+    }
+    // 文本类组件含非 ASCII（中文等）→ 生成字库子集并挂 font 引用
+    if ((w.type === 'text' || w.type === 'ticker') && w.text &&
+        /[^\x00-\x7F]/.test(w.text)) {
+      const cellH = FONT_CELL[w.size || 'm'] || FONT_CELL.m;
+      const id = `cn${cellH}`;
+      if (!out.fonts.find((f) => f.id === id)) {
+        const all = out.layout.widgets
+          .filter((x) => (x.type === 'text' || x.type === 'ticker') && x.text &&
+                          (FONT_CELL[x.size || 'm'] || FONT_CELL.m) === cellH)
+          .map((x) => x.text).join('');
+        out.fonts.push({ id, size: cellH, glyphs: buildFontSubset(all, cellH) });
+      }
+      w.font = id;
+    } else if (w.type === 'text' || w.type === 'ticker') {
+      delete w.font;  // 纯 ASCII 用设备默认 5x7
     }
   }
   return out;
@@ -598,7 +620,7 @@ document.body.appendChild(imgFile);
 let importTarget = -1;         // 导入目标 widget 下标
 let binarizeMode = 'dither';   // dither | otsu（导入期选项，编辑器侧状态，不入协议）
 
-const b64Of = (u8) => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s); };
+// b64Of 定义在 sim.js（编辑器页与模拟器页共用；此处勿再声明，const 跨脚本重名会抛错）
 
 function pickImage(i) {
   importTarget = i;

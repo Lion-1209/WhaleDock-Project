@@ -106,6 +106,7 @@ function validate(doc) {
     errors.push('规则3: resolution 必须为 [800,480]');
 
   const sourceIds = (doc.dataSources || []).map((d) => d.id);
+  const fontIds = (doc.fonts || []).map((f) => f.id);
   const widgets = doc.layout.widgets || [];
   if (!widgets.length) errors.push('规则4: widgets 不能为空');
 
@@ -147,6 +148,8 @@ function validate(doc) {
     }
     if (w.align !== undefined && !['left', 'center', 'right'].includes(w.align))
       errors.push('规则7: align 仅 left|center|right');
+    if (w.font !== undefined && !fontIds.includes(w.font))
+      errors.push(`规则6: font '${w.font}' 未在 fonts 声明`);
   }
   return { errors, mode: 'layout', widgets, sources: sourceIds };
 }
@@ -552,7 +555,168 @@ function drawBarChart(r, w) {
   ctx.fillText('本周', r.x + r.w - 12, bot + 6);
 }
 
+// ---- 中文字库子集（协议 §6）——预览与设备同源：同一打包器、同一绘制算法 ----
+// glyphs 格式 v1：[u16LE 字形数][u8 字高 cellH] + 每字形 [u16LE 码点][u8 墨宽 w]
+// [u8 推进 adv] + ceil(w/8)*cellH 字节位图（MSB-first 行主序，统一字高定行对齐）。
+// 2x 渲染 + 2x2 盒式降采样（阈 160）；所有字形共享基线（全体最大升部，兜底
+// 0.86em），中点等小字符按基线自然落位行中；画布按字形外接框动态定宽，
+// 防中文全宽墨迹采样越界回绕（同字双影→设备叠字乱码，2026-09-25 事故）。
+const FONT_CELL = { s: 16, m: 24, l: 32 };  // size 档 → 字高（px）
+const b64Of = (u8) => { let s = ''; for (const b of u8) s += String.fromCharCode(b); return btoa(s); };
+
+function buildFontSubset(text, cellH) {
+  // 空白不入库：设备/预览缺字一律按 h/2 步进跳过
+  const chars = [...new Set([...text])].filter((c) => !" \n\r\t".includes(c));
+  if (!chars.length) return null;
+  const c2 = document.createElement('canvas');
+  const g2 = c2.getContext('2d', { willReadFrequently: true });
+  const fontSpec = `${cellH * 2}px "Microsoft YaHei", "PingFang SC", "Noto Sans SC", sans-serif`;
+  // 第一遍量外接框：共享基线 = 全体字形的最大升部（兜底 CJK 常规升部，
+  // 防纯小字符集（如只有"·"）整体顶到格子上面）
+  c2.width = 8; c2.height = 8;  // 改尺寸会重置状态，量字形用小画布即可
+  g2.font = fontSpec;
+  const met = chars.map((ch) => {
+    const m = g2.measureText(ch);
+    const inkL = Math.max(0, Math.floor(m.actualBoundingBoxLeft ?? 0));
+    return {
+      ch, cp: ch.codePointAt(0), inkL,
+      inkW: Math.ceil(m.actualBoundingBoxRight ?? m.width) + inkL,  // 墨迹总宽
+      adv: Math.max(1, Math.round(m.width / 2)) + 1,                // 推进宽（2x → 1x）
+    };
+  });
+  const maxAsc = Math.max(Math.round(cellH * 2 * 0.86),
+    ...met.map((t) => Math.ceil(g2.measureText(t.ch).actualBoundingBoxAscent ?? 0)));
+  const maxDesc = Math.max(2, Math.round(cellH * 2 * 0.14),
+    ...met.map((t) => Math.ceil(g2.measureText(t.ch).actualBoundingBoxDescent ?? 0)));
+  const PAD = 4;                    // 源像素护边
+  const entries = [];
+  for (const t of met) {
+    c2.width = PAD + t.inkW + PAD;
+    c2.height = PAD + maxAsc + maxDesc + PAD;
+    g2.font = fontSpec;             // 画布改过尺寸，字体必须重设
+    g2.fillStyle = '#fff';          // 铺白底：透明像素 RGB=(0,0,0) 会被误判为墨
+    g2.fillRect(0, 0, c2.width, c2.height);
+    g2.fillStyle = '#000'; g2.textBaseline = 'alphabetic';
+    g2.fillText(t.ch, PAD + t.inkL, PAD + maxAsc);  // 墨迹左缘对齐左护边、基线对齐共享基线行
+    const w = Math.max(1, Math.ceil(t.inkW / 2));   // 2x → 1x 墨宽
+    const d = g2.getImageData(0, 0, c2.width, c2.height).data;
+    const stride = Math.ceil(w / 8);
+    const bm = new Uint8Array(stride * cellH);
+    for (let y = 0; y < cellH; y++)
+      for (let x = 0; x < w; x++) {
+        const sx = Math.min(c2.width - 2, PAD + x * 2);
+        const sy = Math.min(c2.height - 2, PAD + y * 2);
+        // 2x2 盒式均值替代点采样：细笔画抗锯齿边缘不丢
+        let lum = 0;
+        for (let dy = 0; dy < 2; dy++)
+          for (let dx = 0; dx < 2; dx++) {
+            const i = ((sy + dy) * c2.width + sx + dx) * 4;
+            lum += d[i] + d[i + 1] + d[i + 2];
+          }
+        if (lum / 12 < 160)
+          bm[y * stride + (x >> 3)] |= 0x80 >> (x & 7);
+      }
+    entries.push({ cp: t.cp, w, adv: t.adv, bm });
+  }
+  const total = 3 + entries.reduce((a, e) => a + 4 + e.bm.length, 0);
+  const out = new Uint8Array(total);
+  out[0] = entries.length & 0xFF; out[1] = entries.length >> 8; out[2] = cellH;
+  let o = 3;
+  for (const e of entries) {
+    out[o++] = e.cp & 0xFF; out[o++] = e.cp >> 8;
+    out[o++] = e.w; out[o++] = e.adv;
+    out.set(e.bm, o); o += e.bm.length;
+  }
+  return b64Of(out);
+}
+
+// 解码缓存（key: cellH|全文）：重绘/拖拽时零重复栅格化
+const cnFontCache = new Map();
+function cnFontFor(text, cellH) {
+  const key = `${cellH}|${text}`;
+  if (cnFontCache.has(key)) return cnFontCache.get(key);
+  const b64 = buildFontSubset(text, cellH);
+  if (!b64) { cnFontCache.set(key, null); return null; }
+  const b = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  const glyphs = new Map();
+  let o = 3;
+  for (let i = 0, n = b[0] | (b[1] << 8); i < n; i++) {
+    const cp = b[o] | (b[o + 1] << 8), w = b[o + 2], adv = b[o + 3];
+    const stride = (w + 7) >> 3, len = stride * b[2];
+    glyphs.set(cp, { w, adv, bm: b.slice(o + 4, o + 4 + len) });
+    o += 4 + len;
+  }
+  const font = { h: b[2], glyphs };
+  cnFontCache.set(key, font);
+  return font;
+}
+
+// 字形小画布缓存（key 含颜色；红黄黑三套 × 数十字形，重绘全走 drawImage）
+const glyphCvCache = new Map();
+function cnGlyphCanvas(cp, g, h, colorName) {
+  const key = `${h}|${colorName}|${cp}`;
+  let c = glyphCvCache.get(key);
+  if (c) return c;
+  c = document.createElement('canvas');
+  c.width = g.w; c.height = h;
+  const hex = COL[colorName] || COL.black;
+  const img = c.getContext('2d').createImageData(g.w, h);
+  const stride = (g.w + 7) >> 3;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < g.w; x++)
+      if (g.bm[y * stride + (x >> 3)] & (0x80 >> (x & 7))) {
+        const i = (y * g.w + x) * 4;
+        img.data[i] = parseInt(hex.slice(1, 3), 16);
+        img.data[i + 1] = parseInt(hex.slice(3, 5), 16);
+        img.data[i + 2] = parseInt(hex.slice(5, 7), 16);
+        img.data[i + 3] = 255;
+      }
+  c.getContext('2d').putImageData(img, 0, 0);
+  glyphCvCache.set(key, c);
+  return c;
+}
+
+// 与固件 drawFontText（widgets.cpp）逐行同算法：步进宽换行（r.w-12）、行距 h+4、
+// 垂直居中、center/right/left 对齐（右对齐内缩 6px）、缺字按 h/2 步进。
+// 返回 false = 无中文字形，交回浏览器字体路径（纯 ASCII 近似即可）
+function drawCnText(r, text, cellH, colorName, alignC) {
+  const font = cnFontFor(text, cellH);
+  if (!font) return false;
+  const { h, glyphs } = font;
+  const advOf = (cp) => (glyphs.has(cp) ? glyphs.get(cp).adv : h >> 1);
+  const lines = [];
+  let cur = '', curW = 0;
+  for (const ch of String(text)) {
+    const adv = advOf(ch.codePointAt(0));
+    if (curW + adv > r.w - 12 && cur.length) { lines.push(cur); cur = ''; curW = 0; }
+    cur += ch; curW += adv;
+  }
+  if (cur.length) lines.push(cur);
+  const lineH = h + 4;
+  let y = r.y + ((r.h - lines.length * lineH) / 2 | 0);
+  const align = alignC || 'center';
+  for (const ln of lines) {
+    let tw = 0;
+    for (const ch of ln) tw += advOf(ch.codePointAt(0));
+    let x = align === 'right' ? r.x + r.w - 6 - tw
+          : align === 'left' ? r.x + 6
+          : r.x + ((r.w - tw) / 2 | 0);
+    for (const ch of ln) {
+      const cp = ch.codePointAt(0);
+      const g = glyphs.get(cp);
+      if (g) { ctx.drawImage(cnGlyphCanvas(cp, g, h, colorName), x, y); x += g.adv; }
+      else x += h >> 1;
+    }
+    y += lineH;
+  }
+  return true;
+}
+
 function drawText(r, w) {
+  const text = String(w.text || '');
+  // 含非 ASCII → 走字库位图管线，预览与设备同源（换行/行距/对齐逐像素一致）
+  if (/[^\x00-\x7F]/.test(text) &&
+      drawCnText(r, text, FONT_CELL[w.size || 'm'] || FONT_CELL.m, w.color, w.align)) return;
   const size = { s: 14, m: 22, l: 32 }[w.size || 'm'];
   ctx.fillStyle = COL[w.color || 'black'];
   ctx.font = font(size);
@@ -622,10 +786,12 @@ function drawQr(r, w) {
 }
 
 function drawTicker(r, w) {
+  const text = String(w.text || '');
+  if (/[^\x00-\x7F]/.test(text) && drawCnText(r, text, FONT_CELL.m, w.color)) return;
   ctx.fillStyle = COL[w.color || 'black'];
   ctx.font = font(22);
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(String(w.text || ''), r.x + r.w / 2, r.y + r.h / 2);
+  ctx.fillText(text, r.x + r.w / 2, r.y + r.h / 2);
 }
 
 function render(doc) {

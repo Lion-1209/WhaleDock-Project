@@ -1,5 +1,7 @@
 #include "widgets.h"
 
+#include <vector>
+
 #include <Arduino.h>
 #include <time.h>
 
@@ -473,7 +475,121 @@ void drawBarChart(Rect r, JsonObject w) {
   d.print("W-" + String(n + 1));
 }
 
-void drawText(Rect r, JsonObject w) {
+// ---- 中文字库子集渲染（协议 §6；glyphs 格式 v1 见 editor.js buildFontSubset）----
+// [u16LE 字形数][u8 字高] + 每字形 [u16LE 码点][u8 墨宽][u8 推进] + ceil(w/8)*h 位图
+uint16_t utf8Next(const char*& p) {  // UTF-8 → 码点（文本字段为 UTF-8 中文/ASCII 混排）
+  const unsigned char c = *p;
+  if (!c) return 0;
+  if (c < 0x80) { p++; return c; }
+  if ((c & 0xE0) == 0xC0 && (p[1] & 0xC0) == 0x80) {
+    const uint16_t cp = ((c & 0x1F) << 6) | (p[1] & 0x3F); p += 2; return cp;
+  }
+  if ((c & 0xF0) == 0xE0 && (p[1] & 0xC0) == 0x80 && (p[2] & 0xC0) == 0x80) {
+    const uint16_t cp = ((c & 0x0F) << 12) | ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+    p += 3; return cp;
+  }
+  p++; return '?';
+}
+
+const uint8_t* fontGlyph(const uint8_t* font, uint16_t cp) {  // 线性扫，字形 ≤ 数百
+  const uint16_t count = font[0] | (font[1] << 8);
+  const uint8_t h = font[2];
+  const uint8_t* q = font + 3;
+  for (uint16_t i = 0; i < count; i++) {
+    const uint16_t gcp = q[0] | (q[1] << 8);
+    const uint8_t w = q[2];
+    if (gcp == cp) return q;
+    q += 4 + ((w + 7) / 8) * h;
+  }
+  return nullptr;  // 缺字（规则 6 拦截 font 引用；编辑器按用字生成故不应发生）
+}
+
+void drawFontText(Rect r, const char* text, const uint8_t* font, uint16_t color,
+                  const char* alignC) {
+  auto& d = canvas::get();
+  const uint8_t h = font[2];
+  const int lineH = h + 4;
+  const String align = alignC ? alignC : "center";
+  std::vector<String> lines;  // 按宽换行（推进宽度计宽）
+  String cur;
+  int curW = 0;
+  const char* p = text;
+  for (uint16_t cp = utf8Next(p); cp; cp = utf8Next(p)) {
+    const uint8_t* g = fontGlyph(font, cp);
+    const int adv = g ? g[3] : h / 2;
+    if (curW + adv > r.w - 12 && cur.length()) { lines.push_back(cur); cur = ""; curW = 0; }
+    if (cp < 0x80) cur += (char)cp;
+    else {
+      char buf[4];
+      if (cp < 0x800) { buf[0] = 0xC0 | (cp >> 6); buf[1] = 0x80 | (cp & 0x3F); buf[2] = 0; }
+      else { buf[0] = 0xE0 | (cp >> 12); buf[1] = 0x80 | ((cp >> 6) & 0x3F); buf[2] = 0x80 | (cp & 0x3F); buf[3] = 0; }
+      cur += buf;
+    }
+    curW += adv;
+  }
+  if (cur.length()) lines.push_back(cur);
+  int y = r.y + (r.h - (int)lines.size() * lineH) / 2;
+  for (const String& ln : lines) {
+    int tw = 0;
+    const char* q = ln.c_str();
+    for (uint16_t cp = utf8Next(q); cp; cp = utf8Next(q)) {
+      const uint8_t* g = fontGlyph(font, cp);
+      tw += g ? g[3] : h / 2;
+    }
+    int x = r.x + (r.w - tw) / 2;
+    if (align == "right") x = r.x + r.w - 6 - tw;
+    else if (align == "left") x = r.x + 6;
+    const char* q2 = ln.c_str();
+    for (uint16_t cp = utf8Next(q2); cp; cp = utf8Next(q2)) {
+      const uint8_t* g = fontGlyph(font, cp);
+      if (g) {
+        const uint8_t w = g[2], adv = g[3];
+        const int stride = (w + 7) / 8;
+        const uint8_t* bm = g + 4;
+        for (int by = 0; by < h; by++)
+          for (int bx = 0; bx < w; bx++)
+            if (bm[by * stride + (bx >> 3)] & (0x80 >> (bx & 7)))
+              d.fillRect(x + bx, y + by, 1, 1, color);
+        x += adv;
+      } else {
+        x += h / 2;
+      }
+    }
+    y += lineH;
+  }
+}
+
+// fonts[].glyphs 解码到 heap（失败返回 nullptr）
+uint8_t* decodeFont(JsonDocument& doc, const char* fontId) {
+  for (JsonObject f : doc["fonts"].as<JsonArray>()) {
+    if (strcmp(f["id"] | "", fontId)) continue;
+    const String b64 = f["glyphs"] | "";
+    size_t need = 0;
+    if (mbedtls_base64_decode(nullptr, 0, &need, (const uint8_t*)b64.c_str(), b64.length()) != 0 &&
+        need == 0)
+      return nullptr;
+    uint8_t* buf = (uint8_t*)malloc(need ? need : 1);
+    size_t got = 0;
+    if (buf && mbedtls_base64_decode(buf, need, &got, (const uint8_t*)b64.c_str(), b64.length()) == 0)
+      return buf;
+    free(buf);
+    return nullptr;
+  }
+  return nullptr;
+}
+
+void drawText(Rect r, JsonObject w, JsonDocument& doc) {
+  const char* fontId = w["font"] | "";
+  if (*fontId) {
+    uint8_t* font = decodeFont(doc, fontId);
+    if (font) {
+      drawFontText(r, w["text"] | "", font, colorOf(w["color"] | "black"),
+                   w["align"] | "center");
+      free(font);
+      return;
+    }
+    // 字库缺失/解码失败回退 5x7（规则 6 已拦截引用，正常不达）
+  }
   drawTextAt(r, w["text"] | "", sizePx(w["size"] | "m"), w["align"] | "center",
              w["color"] | "black");
 }
@@ -599,7 +715,16 @@ void drawImageRes(Rect r, JsonObject w, JsonDocument& doc) {
   }
 }
 
-void drawTicker(Rect r, JsonObject w) {
+void drawTicker(Rect r, JsonObject w, JsonDocument& doc) {
+  const char* fontId = w["font"] | "";
+  if (*fontId) {
+    uint8_t* font = decodeFont(doc, fontId);
+    if (font) {
+      drawFontText(r, w["text"] | "", font, colorOf(w["color"] | "black"), "center");
+      free(font);
+      return;
+    }
+  }
   drawTextAt(r, w["text"] | "", 3, "center", w["color"] | "black");
 }
 
@@ -629,10 +754,10 @@ bool render(const String& layoutJson) {
     else if (type == "stats") drawStats(r, w);
     else if (type == "barChart") drawBarChart(r, w);
     else if (type == "heatMap") drawHeatMap(r, w);
-    else if (type == "text") drawText(r, w);
+    else if (type == "text") drawText(r, w, doc);
     else if (type == "repo") drawRepo(r, w);
     else if (type == "title") drawTitle(r, w, doc);
-    else if (type == "ticker") drawTicker(r, w);
+    else if (type == "ticker") drawTicker(r, w, doc);
     else if (type == "qr") drawQr(r, w);
     else if (type == "image") drawImageRes(r, w, doc);
   }
