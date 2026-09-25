@@ -40,8 +40,9 @@ struct RepoStats {
 
 struct CommitActivity {
   bool ok = false;
-  std::vector<int> weeklyTotals;  // 最近 12 周的每周提交数（旧 → 新）
-  int total = 0;                  // 12 周合计
+  std::vector<int> weeklyTotals;  // 每周提交数（旧 → 新，参与接口给 52 周；
+                                  // v0.12 起全量保留，热力图取尾部 26 周窗口）
+  int total = 0;                  // 合计
   String fetchedAt;
   String error;
 };
@@ -50,10 +51,22 @@ UserStats fetchUser(const char* login);
 RepoStats fetchRepo(const char* owner, const char* repo);
 CommitActivity fetchCommitActivity(const char* owner, const char* repo);
 
-// 缓存回读（A4 断网兜底渲染用）：成功返回 true 并填充 fetchedAt；
-// 拉取成功即自动落盘（/cache/*.json），无需调用方操心写缓存
+// ---- 缓存（v0.12：拉取与落盘解耦，写哪里由调用方决定） ----
+// 全局缓存 = 设备配置口径，未绑定 source 挂件的兜底渲染数据
+void saveUserCache(const UserStats& u);
+void saveRepoCache(const RepoStats& r);
+void saveCommitsCache(const CommitActivity& c);
 bool loadCachedUser(UserStats& out);
 bool loadCachedRepo(RepoStats& out);
 bool loadCachedCommits(CommitActivity& out);
+
+// 按数据源 id 的缓存（协议 §5 dataSources 绑定）：id 净化为 [a-z0-9_]
+// （非法字符转 _，含 src_ 前缀共 ≤16 位）后作 LittleFS 缓存名，
+// 单文件合并存该源全部分项；saveSourceData 只覆盖非空分项（保留旧分项）
+void saveSourceData(const char* id, const UserStats* u, const RepoStats* r,
+                    const CommitActivity* c);
+bool loadSourceUser(const char* id, UserStats& out);
+bool loadSourceRepo(const char* id, RepoStats& out);
+bool loadSourceCommits(const char* id, CommitActivity& out);
 
 }  // namespace github

@@ -46,6 +46,19 @@
   /* 添加 widget 下拉 */
   .add-bar { display: flex; gap: 6px; }
   .add-bar select { flex: 1; }
+
+  /* 数据源卡（协议 §5：id 供挂件 source 引用，params 按类型） */
+  .src-list { display: flex; flex-direction: column; gap: 8px; }
+  .src-item { border: 1px solid var(--border); border-radius: 8px; padding: 8px;
+              display: flex; flex-direction: column; gap: 6px; }
+  .src-row { display: flex; gap: 6px; align-items: center; }
+  .src-row input { flex: 1; min-width: 0; }
+  .src-row select { width: 76px; flex: none; }
+  .src-row button { flex: none; padding: 4px 8px; }
+  .src-item input, .src-item select {
+    background: var(--bg); color: var(--text); font-size: 12px;
+    border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px; }
+  .src-item input:focus, .src-item select:focus { outline: none; border-color: var(--accent); }
 </style>
 </head>
 <body>
@@ -78,6 +91,17 @@
           <option value="image">image 图片</option>
         </select>
         <button type="button" id="btn-add" class="flat">添加</button>
+      </div>
+    </section>
+    <section class="card">
+      <h2>数据源 <span style="color:var(--dim);font-weight:400">整点按声明逐源拉数</span></h2>
+      <div id="src-list" class="src-list"></div>
+      <div class="add-bar" style="margin-top:10px">
+        <select id="src-add-type">
+          <option value="github.user">github.user · 用户</option>
+          <option value="github.repo">github.repo · 仓库</option>
+        </select>
+        <button type="button" id="btn-src-add" class="flat">添加</button>
       </div>
     </section>
     <section class="card">
@@ -133,8 +157,8 @@
 </script>
 <script src="js/title_art.js?v=20260924c"></script>
 <script src="js/whale_art.js?v=20260924"></script>
-<script src="js/sim.js?v=20260926b"></script>
-<script src="js/editor.js?v=20260926c"></script>
+<script src="js/sim.js?v=20260926c"></script>
+<script src="js/editor.js?v=20260926e"></script>
 
 </body>
 </html>

@@ -67,18 +67,19 @@ const demoData = {
           participation: [18, 25, 31, 22, 40, 35, 28, 33, 45, 38, 52, 47] },
 };
 // 26 周 × 7 天热力图演示矩阵（0-4 级；确定性伪随机，刷新不变）
+// 周参与序列（mock）：与固件 heatLevelAt 同权重同阈值——周合计按工作日权重
+// 确定性分配到 7 日格（列合计 = 周提交数；参与接口为周粒度，日格为示意分配）
 const heatDemo = (() => {
   let seed = 20260520;
   const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
-  return Array.from({ length: 26 }, (_, w) =>
-    Array.from({ length: 7 }, () => {
-      const r = rnd();
-      const weekend = w % 7 >= 5;
-      if (r < (weekend ? 0.55 : 0.25)) return 0;
-      if (r < (weekend ? 0.8 : 0.55)) return 1;
-      if (r < (weekend ? 0.93 : 0.78)) return 2;
-      return r < 0.94 ? 3 : 4;
-    }));
+  const KW = [0.22, 0.20, 0.19, 0.15, 0.12, 0.07, 0.05];
+  return Array.from({ length: 26 }, () => {
+    const total = Math.floor(rnd() * rnd() * 80);  // 长尾分布的周提交数（mock）
+    return KW.map((k) => {
+      const dc = Math.round(total * k);
+      return dc === 0 ? 0 : dc === 1 ? 1 : dc <= 3 ? 2 : dc <= 8 ? 3 : 4;
+    });
+  });
 })();
 
 let data = { ...demoData };

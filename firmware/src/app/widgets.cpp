@@ -147,16 +147,40 @@ String fmtK(long v) {
   }
   return String(v);
 }
-long fieldOf(const char* f) {
+
+// 数据上下文（协议 §5 source 绑定）：source 指向布局 dataSources id → 读
+// per-id 缓存；对应类型缺失或未绑定 → 回退全局缓存（兼容存量布局/设备配置口径）
+struct DataCtx {
   github::UserStats u;
-  if (github::loadCachedUser(u)) {
-    if (!strcmp(f, "public_repos")) return u.publicRepos;
-    if (!strcmp(f, "followers")) return u.followers;
-  }
+  bool hasU = false;
   github::RepoStats r;
-  if (github::loadCachedRepo(r)) {
-    if (!strcmp(f, "stars")) return r.stars;
-    if (!strcmp(f, "forks")) return r.forks;
+  bool hasR = false;
+};
+DataCtx dataOf(JsonObject w) {
+  DataCtx c;
+  const char* src = w["source"] | "";
+  if (*src) {
+    if (github::loadSourceUser(src, c.u)) c.hasU = true;
+    if (github::loadSourceRepo(src, c.r)) c.hasR = true;
+  }
+  if (!c.hasU && github::loadCachedUser(c.u)) c.hasU = true;
+  if (!c.hasR && github::loadCachedRepo(c.r)) c.hasR = true;
+  return c;
+}
+// commits 的同款口径（barChart/heatMap）：绑定源优先，回退全局
+bool commitsOf(JsonObject w, github::CommitActivity& out) {
+  const char* src = w["source"] | "";
+  return (*src && github::loadSourceCommits(src, out)) ||
+         github::loadCachedCommits(out);
+}
+long fieldOf(const DataCtx& c, const char* f) {
+  if (c.hasU) {
+    if (!strcmp(f, "public_repos")) return c.u.publicRepos;
+    if (!strcmp(f, "followers")) return c.u.followers;
+  }
+  if (c.hasR) {
+    if (!strcmp(f, "stars")) return c.r.stars;
+    if (!strcmp(f, "forks")) return c.r.forks;
   }
   return -1;  // 无数据 → "—"
 }
@@ -253,12 +277,11 @@ void drawCalendar(Rect r, JsonObject) {
 // （数据来自 user/repo 缓存；原 stats 竖卡的标识行拆出独立组件）
 void drawStatIcon(int cx, int cy, int kind, uint16_t c);  // 定义在 stats 段
 void drawRepo(Rect r, JsonObject w) {
+  const DataCtx cx = dataOf(w);
   String label;
-  github::UserStats u;
-  if (github::loadCachedUser(u)) label = u.login;
-  github::RepoStats rp;
-  if (github::loadCachedRepo(rp) && rp.fullName.length()) {
-    label += " / " + rp.fullName.substring(rp.fullName.indexOf('/') + 1);
+  if (cx.hasU) label = cx.u.login;
+  if (cx.hasR && cx.r.fullName.length()) {
+    label += " / " + cx.r.fullName.substring(cx.r.fullName.indexOf('/') + 1);
   }
   if (!label.length()) label = "github";
   drawStatIcon(r.x + 13, r.y + r.h / 2, 0, GxEPD_RED);
@@ -282,6 +305,7 @@ void drawStats(Rect r, JsonObject w) {
   JsonArray fields = w["fields"];
   JsonArray labels = w["labels"];
   const int n = fields.size();
+  const DataCtx cx = dataOf(w);  // source 绑定解析一次，三种形态共用
   // 单字段 = 独立卡（v1.2 拆分形态；自适应：矮宽条单行 / 高卡上下排）
   if (n == 1) {
     const char* f = fields[0];
@@ -294,7 +318,7 @@ void drawStats(Rect r, JsonObject w) {
     String label = labels ? (labels[0] | String(f)) : String(f);
     // 数值：values 手动覆盖优先（协议 v1.2：mockup/演示用），否则实时数据
     const char* ov = w["values"][0] | (const char*)nullptr;
-    const String vs = ov ? String(ov) : [&] { const long v = fieldOf(f); return v < 0 ? String("-") : fmtK(v); }();
+    const String vs = ov ? String(ov) : [&] { const long v = fieldOf(cx, f); return v < 0 ? String("-") : fmtK(v); }();
     if (one) {  // 矮宽条：图标 + 标签 + 数值同行（标签 size2 与数值同级）
       d.setTextColor(GxEPD_BLACK);
       d.setTextSize(2);
@@ -332,7 +356,7 @@ void drawStats(Rect r, JsonObject w) {
       d.setCursor(r.x + 46, y + rh / 2 - 7);
       d.print(label);
       const char* ov2 = w["values"][i] | (const char*)nullptr;
-      const String vs = ov2 ? String(ov2) : [&] { const long v = fieldOf(fields[i]); return v < 0 ? String("-") : fmtK(v); }();
+      const String vs = ov2 ? String(ov2) : [&] { const long v = fieldOf(cx, fields[i]); return v < 0 ? String("-") : fmtK(v); }();
       d.setTextColor(vc);
       d.setTextSize(3);
       d.setCursor(r.x + r.w - 12 - strW(vs, 3), y + rh / 2 - 11);
@@ -356,7 +380,7 @@ void drawStats(Rect r, JsonObject w) {
     d.setCursor(x + 24, y + 8);
     d.print(label);
     const char* ov3 = w["values"][i] | (const char*)nullptr;
-    const String vs = ov3 ? String(ov3) : [&] { const long v = fieldOf(fields[i]); return v < 0 ? String("-") : fmtK(v); }();
+    const String vs = ov3 ? String(ov3) : [&] { const long v = fieldOf(cx, fields[i]); return v < 0 ? String("-") : fmtK(v); }();
     d.setTextColor(vc);
     d.setTextSize(3);
     d.setCursor(x + cw - 10 - strW(vs, 3), y + h - 30);
@@ -364,28 +388,17 @@ void drawStats(Rect r, JsonObject w) {
   }
 }
 
-// 26 周 × 7 天演示矩阵：与模拟器同源（LCG 种子 20260520，确定性）。
-// 按日贡献需 GraphQL（二期）；一期与模拟器恒用演示数据口径一致
-uint8_t heatDemoAt(int wi, int di) {
-  static uint8_t grid[26][7];
-  static bool built = false;
-  if (!built) {
-    uint32_t seed = 20260520;
-    for (int w = 0; w < 26; w++)
-      for (int dd = 0; dd < 7; dd++) {
-        seed = (seed * 1103515245u + 12345u) % 2147483648u;
-        const float rnd = (float)((uint64_t)seed * 1000000ull / 2147483648u) / 1000000.0f;
-        const bool weekend = w % 7 >= 5;
-        uint8_t lv;
-        if (rnd < (weekend ? 0.55f : 0.25f)) lv = 0;
-        else if (rnd < (weekend ? 0.80f : 0.55f)) lv = 1;
-        else if (rnd < (weekend ? 0.93f : 0.78f)) lv = 2;
-        else lv = rnd < 0.94f ? 3 : 4;
-        grid[w][dd] = lv;
-      }
-    built = true;
-  }
-  return grid[wi][di];
+// 周合计 → 7 日格的确定性分配（协议 §5 注明：参与接口为周粒度，列合计 =
+// 真实周提交数，日格为工作日权重示意分配；与模拟器同权重同阈值）
+uint8_t heatLevelAt(const std::vector<int>& weekly, int wi, int di) {
+  static const float kDayW[7] = {0.22f, 0.20f, 0.19f, 0.15f, 0.12f, 0.07f, 0.05f};
+  const int total = weekly[wi];
+  const int dc = (int)(total * kDayW[di] + 0.5f);  // 分配到该日的提交数
+  if (dc == 0) return 0;
+  if (dc == 1) return 1;
+  if (dc <= 3) return 2;
+  if (dc <= 8) return 3;
+  return 4;
 }
 
 void drawHeatMap(Rect r, JsonObject w) {
@@ -397,19 +410,34 @@ void drawHeatMap(Rect r, JsonObject w) {
   d.setTextSize(2);
   d.setCursor(r.x + 4, r.y + 8);
   d.print(title);
-  const int weeks = 26;
+  // 真实周参与数据（source 绑定优先，回退全局）；尾部 26 周窗口
+  github::CommitActivity c;
+  const bool has = commitsOf(w, c);
+  std::vector<int> weekly;
+  if (has) {
+    const size_t n = c.weeklyTotals.size();
+    const size_t from = n > 26 ? n - 26 : 0;
+    weekly.assign(c.weeklyTotals.begin() + from, c.weeklyTotals.end());
+  }
+  const int weeks = weekly.size() > 0 ? (int)weekly.size() : 26;  // 无数据 = 空格阵
   // 方格边长按槽宽定（模拟器同款）；真实版式 bl=500x160 → cw=18、格阵 468x126
-  const int cw = (r.w - 8) / weeks;
+  const int cw = (r.w - 8) / 26;
   const int cell = cw - 2;
   const int gx = r.x + 4, gy = r.y + 38;
   for (int wi = 0; wi < weeks; wi++)
     for (int di = 0; di < 7; di++) {
-      const int lv = heatDemoAt(wi, di);
+      const int lv = has ? heatLevelAt(weekly, wi, di) : 0;
       const int x = gx + wi * cw, y = gy + di * cw;
       if (lv == 0) d.drawRect(x, y, cell, cell, GxEPD_BLACK);
       else if (lv == 4) d.fillRect(x, y, cell, cell, GxEPD_RED);
       else d.fillRect(x, y, cell, cell, GxEPD_BLACK);
     }
+  if (!has) {  // 首次上电/断网兜底：空格阵 + 提示（整点流水自动补数）
+    d.setTextColor(GxEPD_BLACK);
+    d.setTextSize(1);
+    d.setCursor(gx + 4, gy + 7 * cw / 2 - 4);
+    d.print("等待数据（整点自动拉取，CLI pipe 立即触发）");
+  }
   // 月份轴（月份变化列标注）
   static const char* kMon[] = {"Jan", "Feb", "Mar", "Apr", "May", "Jun",
                                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
@@ -444,7 +472,7 @@ void drawHeatMap(Rect r, JsonObject w) {
 void drawBarChart(Rect r, JsonObject w) {
   auto& d = canvas::get();
   github::CommitActivity c;
-  const bool has = github::loadCachedCommits(c);
+  const bool has = commitsOf(w, c);  // source 绑定优先，回退全局
   const String title = w["title"] | "Commits";
   d.setTextColor(GxEPD_BLACK);
   d.setTextSize(2);

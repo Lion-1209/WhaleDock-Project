@@ -19,7 +19,10 @@
 //        OTA MD5 完整性校验 + token 迁 NVS + CORS 白名单 + 输入/路径校验
 // 0.11.0：中文字库子集（协议 §6）——编辑器按用字生成随布局下发，设备端
 //        UTF-8 解码 + 位图 blit；预览/设备同源渲染（一份位图两处画）
-constexpr const char* FW_VERSION = "0.11.0";
+// 0.12.0：dataSources 打通（协议 §5）——整点流水按布局声明逐源拉数落
+//        per-id 缓存，挂件 source 绑定生效；热力图接真实周参与数据；
+//        无声明回退设备配置，未绑定挂件回退全局缓存（存量布局零变化）
+constexpr const char* FW_VERSION = "0.12.0";
 
 // 屏到货（2026-09-22，DFG0750RYS677F71HP-D1，经 EVK011 转接板）= true：开机跑 B1 点屏自检
 constexpr bool SCREEN_ATTACHED = true;

@@ -125,11 +125,12 @@ void cmdGh(char* rest) {
   const uint32_t t0 = millis();
   if (!strncmp(rest, "user ", 5)) {
     const github::UserStats u = github::fetchUser(rest + 5);
-    if (u.ok)
+    if (u.ok) {
+      github::saveUserCache(u);  // v0.12 拉取不再自动落盘，CLI 测试成功即更新全局缓存
       Serial.printf("[GitHub] 用户 %s：公开仓库 %d · 关注者 %d（耗时 %.1fs）\n",
                     u.login.c_str(), u.publicRepos, u.followers,
                     (millis() - t0) / 1000.0);
-    else
+    } else
       Serial.printf("[GitHub] 失败：%s（耗时 %.1fs）\n", u.error.c_str(),
                     (millis() - t0) / 1000.0);
   } else if (!strncmp(rest, "repo ", 5) || !strncmp(rest, "commits ", 8)) {
@@ -149,17 +150,19 @@ void cmdGh(char* rest) {
                       (millis() - t0) / 1000.0);
         return;
       }
+      github::saveCommitsCache(c);
       Serial.printf("[GitHub] %s/%s 近 %d 周提交（旧→新，耗时 %.1fs）：\n  ", slug,
                     repo, (int)c.weeklyTotals.size(), (millis() - t0) / 1000.0);
       for (const int w : c.weeklyTotals) Serial.printf("%d ", w);
       Serial.printf("\n  合计 %d 次\n", c.total);
     } else {
       const github::RepoStats s = github::fetchRepo(slug, repo);
-      if (s.ok)
+      if (s.ok) {
+        github::saveRepoCache(s);
         Serial.printf("[GitHub] 仓库 %s：Stars %d · Forks %d（耗时 %.1fs）\n",
                       s.fullName.c_str(), s.stars, s.forks,
                       (millis() - t0) / 1000.0);
-      else
+      } else
         Serial.printf("[GitHub] 失败：%s（耗时 %.1fs）\n", s.error.c_str(),
                       (millis() - t0) / 1000.0);
     }

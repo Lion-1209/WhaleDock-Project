@@ -14,40 +14,7 @@
 namespace github {
 
 namespace {
-
-// 拉取成功即落盘（storage 原子写），fetchedAt 供断网兜底渲染的"数据截至"角标
-void cacheUser(const UserStats& u) {
-  JsonDocument doc;
-  doc["login"] = u.login;
-  doc["public_repos"] = u.publicRepos;
-  doc["followers"] = u.followers;
-  doc["fetchedAt"] = u.fetchedAt;
-  String out;
-  serializeJson(doc, out);
-  storage::saveCache("user", out);
-}
-
-void cacheRepo(const RepoStats& r) {
-  JsonDocument doc;
-  doc["full_name"] = r.fullName;
-  doc["stars"] = r.stars;
-  doc["forks"] = r.forks;
-  doc["fetchedAt"] = r.fetchedAt;
-  String out;
-  serializeJson(doc, out);
-  storage::saveCache("repo", out);
-}
-
-void cacheCommits(const CommitActivity& c) {
-  JsonDocument doc;
-  JsonArray weeks = doc["weeklyTotals"].to<JsonArray>();
-  for (const int w : c.weeklyTotals) weeks.add(w);
-  doc["total"] = c.total;
-  doc["fetchedAt"] = c.fetchedAt;
-  String out;
-  serializeJson(doc, out);
-  storage::saveCache("commits", out);
-}
+// 见 github.h：v0.12 拉取与落盘解耦，fetch* 只拉数，落盘由调用方决定
 
 String nowStamp() {
   return ntp::synced() ? String(ntp::timeString()) : String("");
@@ -126,7 +93,6 @@ UserStats fetchUser(const char* login) {
   r.publicRepos = doc["public_repos"] | 0;
   r.followers = doc["followers"] | 0;
   r.fetchedAt = nowStamp();
-  cacheUser(r);
   return r;
 }
 
@@ -149,7 +115,6 @@ RepoStats fetchRepo(const char* owner, const char* repo) {
   r.stars = doc["stargazers_count"] | 0;
   r.forks = doc["forks_count"] | 0;
   r.fetchedAt = nowStamp();
-  cacheRepo(r);
   return r;
 }
 
@@ -174,19 +139,50 @@ CommitActivity fetchCommitActivity(const char* owner, const char* repo) {
   }
   r.ok = true;
   JsonArray all = doc["all"];
-  const size_t weeks = all.size();
-  const size_t from = weeks > 12 ? weeks - 12 : 0;  // 只取最近 12 周（旧 → 新）
-  for (size_t i = from; i < weeks; ++i) {
+  const size_t weeks = all.size();  // 全量保留（v0.12 前只取尾部 12 周）
+  for (size_t i = 0; i < weeks; ++i) {
     const int t = all[i] | 0;
     r.weeklyTotals.push_back(t);
     r.total += t;
   }
   r.fetchedAt = nowStamp();
-  cacheCommits(r);
   return r;
 }
 
-// ---- 缓存回读（A4 断网兜底渲染用） ----
+// ---- 全局缓存（设备配置口径，未绑定 source 挂件的兜底渲染数据） ----
+
+void saveUserCache(const UserStats& u) {
+  JsonDocument doc;
+  doc["login"] = u.login;
+  doc["public_repos"] = u.publicRepos;
+  doc["followers"] = u.followers;
+  doc["fetchedAt"] = u.fetchedAt;
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache("user", out);
+}
+
+void saveRepoCache(const RepoStats& r) {
+  JsonDocument doc;
+  doc["full_name"] = r.fullName;
+  doc["stars"] = r.stars;
+  doc["forks"] = r.forks;
+  doc["fetchedAt"] = r.fetchedAt;
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache("repo", out);
+}
+
+void saveCommitsCache(const CommitActivity& c) {
+  JsonDocument doc;
+  JsonArray weeks = doc["weeklyTotals"].to<JsonArray>();
+  for (const int w : c.weeklyTotals) weeks.add(w);
+  doc["total"] = c.total;
+  doc["fetchedAt"] = c.fetchedAt;
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache("commits", out);
+}
 
 bool loadCachedUser(UserStats& out) {
   const String s = storage::loadCache("user");
@@ -225,6 +221,99 @@ bool loadCachedCommits(CommitActivity& out) {
   for (JsonVariant v : weeks) out.weeklyTotals.push_back(v | 0);
   out.total = doc["total"] | 0;
   out.fetchedAt = doc["fetchedAt"] | "";
+  return true;
+}
+
+// ---- 按数据源 id 的缓存（协议 §5 dataSources 绑定） ----
+
+// id 净化为缓存名 src_<id>：小写化、非法字符转 _、含前缀截到 16 位
+// （storage 白名单上限；净化后冲突的 id 共享一份缓存，文档已注明）
+static String srcCacheName(const char* id) {
+  String s = "src_";
+  for (const char* p = id; *p && s.length() < 16; ++p) {
+    char c = *p;
+    if (c >= 'A' && c <= 'Z') c += 32;
+    const bool ok = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+    s += ok ? c : '_';
+  }
+  return s;
+}
+
+void saveSourceData(const char* id, const UserStats* u, const RepoStats* r,
+                    const CommitActivity* c) {
+  const String name = srcCacheName(id);
+  JsonDocument doc;
+  const String old = storage::loadCache(name.c_str());
+  if (old.length()) deserializeJson(doc, old);  // 保留未更新的分项（如本次 commits 拉取失败）
+  if (u) {
+    JsonObject o = doc["user"].to<JsonObject>();
+    o["login"] = u->login;
+    o["public_repos"] = u->publicRepos;
+    o["followers"] = u->followers;
+    o["fetchedAt"] = u->fetchedAt;
+  }
+  if (r) {
+    JsonObject o = doc["repo"].to<JsonObject>();
+    o["full_name"] = r->fullName;
+    o["stars"] = r->stars;
+    o["forks"] = r->forks;
+    o["fetchedAt"] = r->fetchedAt;
+  }
+  if (c) {
+    JsonObject o = doc["commits"].to<JsonObject>();
+    JsonArray weeks = o["weeklyTotals"].to<JsonArray>();
+    for (const int w : c->weeklyTotals) weeks.add(w);
+    o["total"] = c->total;
+    o["fetchedAt"] = c->fetchedAt;
+  }
+  String out;
+  serializeJson(doc, out);
+  storage::saveCache(name.c_str(), out);
+}
+
+bool loadSourceUser(const char* id, UserStats& out) {
+  const String s = storage::loadCache(srcCacheName(id).c_str());
+  if (!s.length()) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, s)) return false;
+  JsonObject o = doc["user"];
+  if (o.isNull()) return false;
+  out.ok = true;
+  out.login = o["login"] | "";
+  out.publicRepos = o["public_repos"] | 0;
+  out.followers = o["followers"] | 0;
+  out.fetchedAt = o["fetchedAt"] | "";
+  return true;
+}
+
+bool loadSourceRepo(const char* id, RepoStats& out) {
+  const String s = storage::loadCache(srcCacheName(id).c_str());
+  if (!s.length()) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, s)) return false;
+  JsonObject o = doc["repo"];
+  if (o.isNull()) return false;
+  out.ok = true;
+  out.fullName = o["full_name"] | "";
+  out.stars = o["stars"] | 0;
+  out.forks = o["forks"] | 0;
+  out.fetchedAt = o["fetchedAt"] | "";
+  return true;
+}
+
+bool loadSourceCommits(const char* id, CommitActivity& out) {
+  const String s = storage::loadCache(srcCacheName(id).c_str());
+  if (!s.length()) return false;
+  JsonDocument doc;
+  if (deserializeJson(doc, s)) return false;
+  JsonObject o = doc["commits"];
+  if (o.isNull()) return false;
+  JsonArray weeks = o["weeklyTotals"];
+  if (weeks.isNull()) return false;
+  out.ok = true;
+  for (JsonVariant v : weeks) out.weeklyTotals.push_back(v | 0);
+  out.total = o["total"] | 0;
+  out.fetchedAt = o["fetchedAt"] | "";
   return true;
 }
 

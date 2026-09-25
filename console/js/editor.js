@@ -157,6 +157,7 @@ function loadLayoutFromText(text) {
   selIdx = -1;
   afterEdit();
   buildLayers();
+  renderSources();
   return true;
 }
 
@@ -262,6 +263,125 @@ function removeWidget(i) {
   buildLayers();
 }
 
+// ---- 数据源卡（协议 §5：声明即生效，整点逐源拉数；id 净化后作设备 per-id 缓存名）----
+function srcParamText(ds) {
+  return ds.type === 'github.repo'
+    ? `${ds.params?.owner || ''}/${ds.params?.repo || ''}`
+    : (ds.params?.user || '');
+}
+
+function renderSources() {
+  const box = $e('src-list');
+  box.innerHTML = '';
+  if (!doc) return;
+  (doc.dataSources || []).forEach((ds, i) => {
+    const item = document.createElement('div');
+    item.className = 'src-item';
+    const row1 = document.createElement('div');
+    row1.className = 'src-row';
+    const idIn = document.createElement('input');
+    idIn.type = 'text'; idIn.value = ds.id;
+    idIn.title = '数据源 id（挂件 source 引用它；设备端净化为缓存名）';
+    idIn.addEventListener('change', () => {
+      const nv = idIn.value.trim().replace(/\s+/g, '_');
+      if (!nv) { msg('数据源 id 不能为空'); idIn.value = ds.id; return; }
+      if (nv !== ds.id && doc.dataSources.some((d) => d.id === nv)) {
+        msg(`数据源 id「${nv}」已存在`);
+        idIn.value = ds.id; return;
+      }
+      // 级联改名：引用旧 id 的挂件一并指向新 id
+      for (const w of doc.layout.widgets) if (w.source === ds.id) w.source = nv;
+      ds.id = nv;
+      afterEdit();
+      renderSources();
+    });
+    const typeSel = document.createElement('select');
+    typeSel.title = '数据源类型';
+    for (const [v, t] of [['github.user', '用户'], ['github.repo', '仓库']])
+      typeSel.add(new Option(t, v));
+    typeSel.value = ds.type === 'github.repo' ? 'github.repo' : 'github.user';
+    typeSel.addEventListener('change', () => {
+      ds.type = typeSel.value;
+      ds.params = {};  // 参数按类型重填
+      afterEdit();
+      renderSources();
+    });
+    const del = document.createElement('button');
+    del.type = 'button'; del.className = 'flat'; del.textContent = '✕';
+    del.title = '删除数据源';
+    del.addEventListener('click', () => {
+      const used = doc.layout.widgets.filter((w) => w.source === ds.id);
+      if (used.length) {
+        msg(`「${ds.id}」被 ${used.length} 个挂件引用（${used.map(autoName).join('、')}），先在属性面板改绑再删除`);
+        return;
+      }
+      doc.dataSources.splice(i, 1);
+      afterEdit();
+      renderSources();
+    });
+    row1.append(idIn, typeSel, del);
+    const row2 = document.createElement('div');
+    row2.className = 'src-row';
+    // 参数固定格式：仓库源 = owner / repo 两框（常驻斜杠分隔），用户源 = 单框；
+    // owner 框兼容整段粘贴（https://github.com/o/r 或 o/r 自动拆分填充）
+    const mkParam = (key, ph, title) => {
+      const i = document.createElement('input');
+      i.type = 'text'; i.value = ds.params?.[key] || '';
+      i.placeholder = ph;
+      if (title) i.title = title;
+      i.addEventListener('change', () => {
+        let v = i.value.trim();
+        if (key === 'owner') {
+          // 粘贴容错：github.com 链接或 owner/repo 整段 → 拆开填两框
+          const m = v.match(/github\.com\/([^/\s]+)(?:\/([^/\s#?]+))?/i);
+          if (m) {
+            v = m[1];
+            if (m[2] && !ds.params?.repo) {
+              ds.params = { ...ds.params, repo: m[2] };
+              repoIn.value = m[2];
+            }
+          } else if (v.includes('/')) {
+            const [a, b] = v.split('/');
+            v = a;
+            if (b && !ds.params?.repo) {
+              ds.params = { ...ds.params, repo: b };
+              repoIn.value = b;
+            }
+          }
+        }
+        if (!v) { msg('参数不能为空'); i.value = ds.params?.[key] || ''; return; }
+        ds.params = { ...ds.params, [key]: v };
+        i.value = v;
+        afterEdit();
+      });
+      return i;
+    };
+    let repoIn = null;
+    if (ds.type === 'github.repo') {
+      const oIn = mkParam('owner', 'owner（可贴仓库链接）');
+      const slash = document.createElement('span');
+      slash.textContent = '/';
+      slash.style.cssText = 'color:var(--dim);flex:none;padding:0 1px';
+      repoIn = mkParam('repo', 'repo');
+      row2.append(oIn, slash, repoIn);
+    } else {
+      row2.appendChild(mkParam('user', 'GitHub 用户名'));
+    }
+    item.append(row1, row2);
+    box.appendChild(item);
+  });
+}
+
+$e('btn-src-add').addEventListener('click', () => {
+  if (!doc) return;
+  doc.dataSources = doc.dataSources || [];
+  let n = 1, id;
+  do { id = `src${n++}`; } while (doc.dataSources.some((d) => d.id === id));
+  doc.dataSources.push({ id, type: $e('src-add-type').value, params: {} });
+  afterEdit();
+  renderSources();
+});
+
 // ---- 属性面板（按 widget 类型出字段）----
 const TYPE_LABEL = { clock: '时钟', date: '日期', calendar: '日历', stats: '统计',
                      barChart: '柱状图', heatMap: '热力图', text: '文字', image: '图片',
@@ -333,6 +453,19 @@ function buildProps() {
       (nv) => { w.align = nv; afterEdit(); });
   const colorSel = (v) => sel(v || 'black', [['black', '黑'], ['red', '红'], ['yellow', '黄']],
       (nv) => { w.color = nv; afterEdit(); });
+  // 数据源绑定（协议 §5）：绑定 → 读该源 per-id 缓存；缺省 → 全局缓存（首个声明源口径）
+  const srcSel = () => {
+    const opts = [['', '全局（首个声明源）'],
+                  ...(doc.dataSources || []).map((d) => [d.id,
+                    `${d.id} · ${d.type === 'github.repo'
+                      ? `${d.params?.owner || '?'}/${d.params?.repo || '?'}`
+                      : (d.params?.user || '?')}`])];
+    return sel(w.source || '', opts, (v) => {
+      if (v) w.source = v;
+      else delete w.source;
+      afterEdit();
+    });
+  };
   if (w.type === 'clock') {
     add('对齐', alignSel(w.align));
   } else if (w.type === 'date') {
@@ -345,6 +478,7 @@ function buildProps() {
   } else if (w.type === 'repo') {
     add('对齐', alignSel(w.align));
     add('颜色', colorSel(w.color));
+    add('数据源', srcSel());
   } else if (w.type === 'title') {
     add('文本', text(w.text || '', (v) => {
       if (v.trim()) w.text = v.trim();
@@ -370,11 +504,14 @@ function buildProps() {
       afterEdit();
     }, '留空 = 实时 GitHub 数据'));
     add('颜色', colorSel(w.color));
+    add('数据源', srcSel());
   } else if (w.type === 'barChart') {
     add('标题', text(w.title || '', (v) => { w.title = v; afterEdit(); }));
     add('目标线', num(w.goal || 0, (v) => { w.goal = v; afterEdit(); }));
+    add('数据源', srcSel());
   } else if (w.type === 'heatMap') {
     add('标题', text(w.title || '', (v) => { w.title = v; afterEdit(); }));
+    add('数据源', srcSel());
   } else if (w.type === 'text' || w.type === 'ticker') {
     add('文本', text(w.text || '', (v) => { w.text = v; afterEdit(); }));
     add('字号', sel(w.size || 'm', [['s', '小'], ['m', '中'], ['l', '大']],
@@ -426,6 +563,7 @@ $e('btn-add').addEventListener('click', () => {
 $e('btn-load-sample').addEventListener('click', () => {
   doc = defaultDoc();
   selIdx = -1;
+  renderSources();
   afterEdit();
   buildLayers();
   msg('已加载示例布局');
@@ -701,6 +839,7 @@ function msg(s) {
 
 // ---- 初始化：优先恢复自动存档（刷新/误关不丢工作），否则加载示例 ----
 doc = defaultDoc();
+renderSources();
 if (!restoreAutosave()) {
   afterEdit();
   buildLayers();
