@@ -5,29 +5,9 @@
 namespace layout {
 
 const char* sampleJson() {
-  // 实机 C2 版式的组件分解版（与模拟器 SAMPLE 一致；v1.2：slot 可省略、clock 拆出
-  // date/calendar、统计拆为 4 个单字段独立条卡、title 艺术体斜体字标（Georgia Bold
-  // Italic）、鲸鱼独立横纵缩放铺满；鲸鱼走保留 id whale_pixel = 固件内置资源）
-  return R"LAY({"version":1,"dataSources":[
-    {"id":"gh","type":"github.user","params":{"user":"datawhalechina"}},
-    {"id":"repo","type":"github.repo","params":{"owner":"datawhalechina","repo":"leeml-notes"}}],
-  "resources":[],
-  "layout":{"resolution":[800,480],"widgets":[
-    {"slotRect":{"x":12,"y":14,"w":330,"h":46},"type":"title"},
-    {"slotRect":{"x":12,"y":66,"w":214,"h":196},"type":"image","resBW":"whale_pixel"},
-    {"slotRect":{"x":12,"y":266,"w":330,"h":22},"type":"repo","align":"left"},
-    {"slotRect":{"x":524,"y":14,"w":264,"h":62},"type":"clock","align":"right"},
-    {"slotRect":{"x":524,"y":84,"w":264,"h":26},"type":"date","size":"s","align":"right"},
-    {"slotRect":{"x":524,"y":116,"w":264,"h":176},"type":"calendar"},
-    {"slotRect":{"x":524,"y":296,"w":264,"h":38},"type":"stats","variant":"chips","color":"red",
-     "fields":["public_repos"],"labels":["Repositories"]},
-    {"slotRect":{"x":524,"y":338,"w":264,"h":38},"type":"stats","variant":"chips",
-     "fields":["stars"],"labels":["Stars"]},
-    {"slotRect":{"x":524,"y":380,"w":264,"h":38},"type":"stats","variant":"chips",
-     "fields":["forks"],"labels":["Forks"]},
-    {"slotRect":{"x":524,"y":422,"w":264,"h":38},"type":"stats","variant":"chips","color":"red",
-     "fields":["followers"],"labels":["Followers"]},
-    {"slotRect":{"x":12,"y":296,"w":500,"h":170},"type":"heatMap","source":"repo","title":"GitHub Contribution"}]}})LAY";
+  // 实机在显版式（与模拟器 SAMPLE 一致；v1.2 组件分解 + 用户调优：
+  // 标题/鲸鱼错位构图 + 红黑黑红统计条 + 放大日期条）
+  return R"LAY({"version":1,"dataSources":[{"id":"gh","type":"github.user","params":{"user":"datawhalechina"}},{"id":"repo","type":"github.repo","params":{"owner":"datawhalechina","repo":"leeml-notes"}}],"resources":[],"layout":{"resolution":[800,480],"widgets":[{"slotRect":{"x":63,"y":14,"w":330,"h":46},"type":"title"},{"slotRect":{"x":89,"y":60,"w":253,"h":196},"type":"image","resBW":"whale_pixel"},{"slotRect":{"x":12,"y":266,"w":330,"h":22},"type":"repo","align":"left"},{"slotRect":{"x":524,"y":14,"w":264,"h":62},"type":"clock","align":"right"},{"slotRect":{"x":456,"y":83,"w":314,"h":45},"type":"date","size":"m","align":"right"},{"slotRect":{"x":524,"y":116,"w":264,"h":176},"type":"calendar"},{"slotRect":{"x":524,"y":296,"w":264,"h":38},"type":"stats","variant":"chips","color":"red","fields":["public_repos"],"labels":["Repositories"]},{"slotRect":{"x":524,"y":338,"w":264,"h":38},"type":"stats","variant":"chips","fields":["stars"],"labels":["Stars"]},{"slotRect":{"x":524,"y":380,"w":264,"h":38},"type":"stats","variant":"chips","color":"black","fields":["forks"],"labels":["Forks"]},{"slotRect":{"x":524,"y":422,"w":264,"h":38},"type":"stats","variant":"chips","color":"red","fields":["followers"],"labels":["Followers"]},{"slotRect":{"x":12,"y":296,"w":500,"h":170},"type":"heatMap","source":"repo","title":"GitHub Contribution"}]}})LAY";
 }
 
 namespace {

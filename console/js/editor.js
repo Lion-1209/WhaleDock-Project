@@ -124,7 +124,70 @@ function afterEdit() {
   paint();        // 画布重渲染
   buildProps();   // 属性面板数值刷新
   dirty = true;
+  autosave();     // localStorage 自动存档（刷新/误关恢复）
 }
+
+// ---- 布局存档：打开 / 保存 / 自动存档 ----
+const AUTOSAVE_KEY = 'whaledock_editor_layout_v1';
+
+function autosave() {
+  try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(doc)); } catch (_) { /* 配额满等，静默 */ }
+}
+
+function restoreAutosave() {
+  try {
+    const s = localStorage.getItem(AUTOSAVE_KEY);
+    if (!s) return false;
+    loadLayoutFromText(s);
+    return true;
+  } catch (_) { return false; }
+}
+
+// 载入布局文本（打开文件 / 自动存档共用）：解析 → 校验 → 生效；失败保留原 doc
+function loadLayoutFromText(text) {
+  let d;
+  try { d = JSON.parse(text); }
+  catch (e) { msg('布局文件不是合法 JSON：' + e.message); return false; }
+  const v = validate(d);
+  if (v.errors.length) {
+    msg('布局校验未通过，未载入：\n' + v.errors.join('\n'));
+    return false;
+  }
+  doc = d;
+  selIdx = -1;
+  afterEdit();
+  buildLayers();
+  return true;
+}
+
+const layoutFile = document.createElement('input');
+layoutFile.type = 'file'; layoutFile.accept = '.json,application/json';
+layoutFile.style.display = 'none';
+document.body.appendChild(layoutFile);
+
+layoutFile.addEventListener('change', async () => {
+  const f = layoutFile.files && layoutFile.files[0];
+  if (!f) return;
+  const text = await f.text();
+  if (loadLayoutFromText(text)) msg(`已载入 ${f.name}（编辑态原文，设备交付走「导出 JSON」）`);
+});
+
+$e('btn-open').addEventListener('click', () => { layoutFile.value = ''; layoutFile.click(); });
+
+$e('btn-save').addEventListener('click', () => {
+  const v = validate(doc);
+  if (v.errors.length) { msg('当前布局有校验错误，仍可保存（设备会拒绝）：\n' + v.errors.join('\n')); }
+  const now = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}`;
+  const json = JSON.stringify(doc, null, 2);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+  a.download = `whaledock-layout-${stamp}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  msg(`已保存编辑态布局（${json.length}B）。提示：「导出 JSON」才是设备交付格式`);
+});
 
 // 几何更新：现有覆盖 div 直接改 left/top/width/height
 function updateHits() {
@@ -614,8 +677,12 @@ function msg(s) {
   msgTimer = setTimeout(() => { $e('ed-msg').textContent = ''; }, 8000);
 }
 
-// ---- 初始化 ----
+// ---- 初始化：优先恢复自动存档（刷新/误关不丢工作），否则加载示例 ----
 doc = defaultDoc();
-afterEdit();
-buildLayers();
-msg('编辑器就绪：拖拽移动、边角缩放、左选图层、右侧改属性');
+if (!restoreAutosave()) {
+  afterEdit();
+  buildLayers();
+  msg('编辑器就绪：拖拽移动、边角缩放、左选图层、右侧改属性');
+} else {
+  msg('已恢复上次编辑的布局（自动存档）；「加载示例布局」可重置');
+}

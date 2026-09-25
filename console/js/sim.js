@@ -20,8 +20,7 @@ const TYPES = ['clock', 'date', 'calendar', 'stats', 'barChart', 'text', 'image'
                'repo', 'title', 'qr', 'ticker', 'heatMap'];
 const FIELDS = ['public_repos', 'followers', 'stars', 'forks'];
 
-// ---- 默认示例：实机 C2 版式的组件分解版（v1.2）----
-// 左列 = 标题字标 + 鲸鱼 + 仓库标识；右列 = 时间/日期/周日历 + 统计竖卡；底部 = 热力图 + 标语。
+// ---- 默认示例：实机在显版式（v1.2，用户调优：标题/鲸鱼错位构图 + 红黑黑红统计条 + 放大日期条）----
 // v1.2 起 slot 可省略（有 slotRect 即可）；鲸鱼 = datawhalelogo.png 转 1bpp 位图资源（协议 image 类型）
 const SAMPLE = `{
   "version": 1,
@@ -46,26 +45,17 @@ const SAMPLE = `{
   "layout": {
     "resolution": [800, 480],
     "widgets": [
-      { "slotRect": { "x": 12,  "y": 14,  "w": 330, "h": 46 },  "type": "title" },
-      { "slotRect": { "x": 12,  "y": 66,  "w": 214, "h": 196 }, "type": "image", "resBW": "whale_pixel" },
-      { "slotRect": { "x": 12,  "y": 266, "w": 330, "h": 22 },  "type": "repo", "align": "left" },
-      { "slotRect": { "x": 524, "y": 14,  "w": 264, "h": 62 },  "type": "clock", "align": "right" },
-      { "slotRect": { "x": 524, "y": 84,  "w": 264, "h": 26 },  "type": "date", "size": "s", "align": "right" },
+      { "slotRect": { "x": 63, "y": 14, "w": 330, "h": 46 }, "type": "title" },
+      { "slotRect": { "x": 89, "y": 60, "w": 253, "h": 196 }, "type": "image", "resBW": "whale_pixel" },
+      { "slotRect": { "x": 12, "y": 266, "w": 330, "h": 22 }, "type": "repo", "align": "left" },
+      { "slotRect": { "x": 524, "y": 14, "w": 264, "h": 62 }, "type": "clock", "align": "right" },
+      { "slotRect": { "x": 456, "y": 83, "w": 314, "h": 45 }, "type": "date", "align": "right", "size": "m" },
       { "slotRect": { "x": 524, "y": 116, "w": 264, "h": 176 }, "type": "calendar" },
-      { "slotRect": { "x": 524, "y": 296, "w": 264, "h": 38 },
-        "type": "stats", "variant": "chips", "color": "red",
-        "fields": ["public_repos"], "labels": ["Repositories"] },
-      { "slotRect": { "x": 524, "y": 338, "w": 264, "h": 38 },
-        "type": "stats", "variant": "chips",
-        "fields": ["stars"], "labels": ["Stars"] },
-      { "slotRect": { "x": 524, "y": 380, "w": 264, "h": 38 },
-        "type": "stats", "variant": "chips",
-        "fields": ["forks"], "labels": ["Forks"] },
-      { "slotRect": { "x": 524, "y": 422, "w": 264, "h": 38 },
-        "type": "stats", "variant": "chips", "color": "red",
-        "fields": ["followers"], "labels": ["Followers"] },
-      { "slotRect": { "x": 12,  "y": 296, "w": 500, "h": 170 },
-        "type": "heatMap", "source": "repo", "title": "GitHub Contribution" }
+      { "slotRect": { "x": 524, "y": 296, "w": 264, "h": 38 }, "type": "stats", "color": "red", "variant": "chips", "fields": ["public_repos"], "labels": ["Repositories"] },
+      { "slotRect": { "x": 524, "y": 338, "w": 264, "h": 38 }, "type": "stats", "variant": "chips", "fields": ["stars"], "labels": ["Stars"] },
+      { "slotRect": { "x": 524, "y": 380, "w": 264, "h": 38 }, "type": "stats", "color": "black", "variant": "chips", "fields": ["forks"], "labels": ["Forks"] },
+      { "slotRect": { "x": 524, "y": 422, "w": 264, "h": 38 }, "type": "stats", "color": "red", "variant": "chips", "fields": ["followers"], "labels": ["Followers"] },
+      { "slotRect": { "x": 12, "y": 296, "w": 500, "h": 170 }, "type": "heatMap", "source": "repo", "title": "GitHub Contribution" }
     ]
   }
 }`;
